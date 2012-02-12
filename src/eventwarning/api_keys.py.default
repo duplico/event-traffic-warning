@@ -1,0 +1,9 @@
+# Rename this file to api_keys.py, and enter your keys.
+
+EVENTFUL_KEY = 'Eventful API key'
+
+LFM_KEY = 'Last.fm API key'
+LFM_SEC = 'Last.fm API secret'
+
+FSQ_CID = 'Foursquare client ID'
+FSQ_SEC = 'Foursquare client secret'
