@@ -21,7 +21,8 @@ class SongkickAPI(object):
         raise NotImplementedError
 
     def _get(self, resource, params={}):
-        params.update(apikey=self.api_key, page=2)
+        params.update(apikey=self.api_key)
         query_result = self.connection.request_get(resource, args=params)
         object_result = json.loads(query_result['body'])
-        return object_result
+        # TODO: deal with pagination
+        return object_result['resultsPage']['results']
