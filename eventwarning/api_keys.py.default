@@ -7,3 +7,5 @@ LFM_SEC = 'Last.fm API secret'
 
 FSQ_CID = 'Foursquare client ID'
 FSQ_SEC = 'Foursquare client secret'
+
+SK_KEY = 'Songkick API key'
