@@ -12,6 +12,7 @@ class EventStruct:
     eventful_event = None
     time = None
     venue = None
+    venue_capacity = 0
     fsq_venue = None
     performers = []
     lfm_performers = []
@@ -23,6 +24,33 @@ class EventStruct:
         self.performers = []
         self.lfm_performers = []
         self.eventful_performers = []
+
+    def get_lfm_plays(self):
+        return reduce(operator.add, (
+            lfm_performer.get_playcount() \
+                for lfm_performer in self.lfm_performers
+        ), 0)
+
+    def get_eventful_demands(self):
+        return reduce(operator.add, (
+            int(eventful_performer['demand_member_count']) \
+                for eventful_performer in self.eventful_performers
+        ), 0)
+
+    def get_attendance_estimate(self):
+        # If we don't know the capacity, we'll assume it's bar sized.
+        # Otherwise we'll need to fix the venue on songkick.
+        capacity = self.venue_capacity or 100
+        lfm_plays = self.get_lfm_plays()
+        attendance_possible = lfm_plays / 500.0
+        # Also there should probably be a venue size penalty
+        attendance = min(capacity, attendance_possible)
+        return attendance
+
+
+
+    def venue_capacity_estimated(self):
+        return not bool(self.venue_capacity)
 
 def get_events_for_day(day):
     ret_events = []
@@ -46,6 +74,8 @@ def get_events_for_day(day):
         page_number += 1
         events = eventful.call('/events/search', q='music', l='74103',
                           date=eventful_daterange, page_number=page_number)
+        if events['total_items'] == '0':
+            return []
         max_pages = int(events['page_count'])
 
         event_list = events['events']['event']
@@ -56,28 +86,41 @@ def get_events_for_day(day):
             venue_title = event['venue_name'].replace(u'\u2019', "'")
             venue_title = venue_title.encode('ascii', 'ignore')
             venue_coords = '%s,%s' % (event['latitude'], event['longitude'])
-            print venue_coords
+            venue_city = event['city_name']
 
-            venues = fsq.venues.search(params=dict(
-                    query=venue_title,
-                    ll=venue_coords,
-                    intent='match'
-                )
-            )
-            venue_guess = venues['venues'][0]
-            checkins = venue_guess['hereNow']['count']
-            venue_city = venue_guess['location']['city']
+            venue_guess = None
+            # TODO: we definitely need to normalize venues using foursquare
+            ## For some reason the foursquare support is broken on my machine
+            ##  due to some kind of httplib2 timeout weirdness that I don't
+            ##  care to diagnose at the moment. The issue is:
+            ##  <http://code.google.com/p/python-rest-client/issues/detail?id=1>
+            #
+            #venues = fsq.venues.search(params=dict(
+            #        query=venue_title,
+            #        ll=venue_coords,
+            #        intent='match'
+            #    )
+            #)
+            #venue_guess = venues['venues'][0]
+            #checkins = venue_guess['hereNow']['count']
 
-            sk_venues_guess = sk.venue_search('%s %s' % (venue_title,
-                                                         venue_city))
-            print sk_venue_guess
+            # Try to grab the capacity of the venue from Songkick:
+            sk_venues_guess = sk.venue_search('%s %s' % (
+                venue_guess or venue_title,
+                venue_city
+            ))
+            sk_capacity = 0 # Unknown
+            if sk_venues_guess:
+                sk_venue_guess = sk_venues_guess['venue'][0]
+                sk_capacity = sk_venue_guess['capacity']
 
             event_struct = EventStruct(
                 title=event['title'],
                 time=event['start_time'],
                 venue=venue_title,
                 eventful_event=event,
-                fsq_venue=venue_guess
+                venue_capacity=sk_capacity or 0,
+                fsq_venue=venue_guess,
             )
 
             ret_events.append(event_struct)
@@ -101,31 +144,35 @@ def get_events_for_day(day):
                     event_struct.lfm_performers.append(lfm_performer)
                     event_struct.eventful_performers.append(eventful_performer)
     # TODO: sort by venue size, when that's available
-    ret_events.sort(key=lambda a: a.venue)
+    ret_events.sort(key=lambda a: '%s %s' % (a.venue, str(a.venue_capacity)))
     return ret_events
 
+def attendance_for_events(events):
+    attendance_total = 0
+    for event in events:
+        attendance_total += event.get_attendance_estimate()
+    return attendance_total
 
-def danger_for_day(day):
+def attendance_for_day(day):
+    events = get_events_for_day(day)
+    return attendance_for_events(events)
+
+def print_day_summary(day):
     events = get_events_for_day(day)
     day_lfm_plays = 0
     day_eventful_demands = 0
 
     for event in events:
-        event_lfm_plays = 0
-        for lfm_performer in event.lfm_performers:
-            event_lfm_plays += lfm_performer.get_playcount()
+        event_lfm_plays = event.get_lfm_plays()
+        event_eventful_demands = event.get_eventful_demands()
 
-        event_eventful_demands = 0
-        for eventful_performer in event.eventful_performers:
-            event_eventful_demands += int(eventful_performer['demand_member_count'])
-
-        event_desc = '%s at %s (lfm:%i, eventful:%i)' % (
+        event_desc = '%s at %s (lfm:%i, eventful:%i, cap:%s): %i' % (
             event.title,
             event.venue,
             event_lfm_plays,
             event_eventful_demands,
+            str(event.venue_capacity or '?'),
+            event.get_attendance_estimate(),
         )
         print event_desc
-        day_lfm_plays += event_lfm_plays
-        day_eventful_demands += event_eventful_demands
-    return day_lfm_plays
+    print 'Total estimate: %i' % attendance_for_events(events)
