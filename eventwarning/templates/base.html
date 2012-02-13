@@ -3,7 +3,7 @@
 <html xmlns="http://www.w3.org/1999/xhtml">
   <head>
     <meta charset="utf-8">
-    <title>Event Warning</title>
+    <title>{% block title %}Event Warning{% endblock title %}</title>
     <meta name="description" content="">
     <meta name="author" content="">
     <!-- Le HTML5 shim, for IE6-8 support of HTML elements -->
@@ -38,16 +38,19 @@
           <a class="brand" href="#">Event Danger</a>
           <div class="nav-collapse">
             <ul class="nav">
-              <li><a href="../../today/">Today</a></li>
-              <li><a href="../../tomorrow/">Tomorrow</a></li>
-              <li><a href="../../date/">Date</a></li>
-              <li><a href="/contact/">Report Problem</a></li>
-              <li><a href="/about/">About</a></li>
+              {% block breadcrumb %}
+                <li><a href="../../today/">Today</a></li>
+                <li><a href="../../tomorrow/">Tomorrow</a></li>
+                <li><a href="../../date/">Date</a></li>
+                <li><a href="/contact/">Report Problem</a></li>
+                <li><a href="/about/">About</a></li>
+              {% endblock breadcrumb %}
             </ul>
           </div><!--/.nav-collapse -->
         </div>
       </div>
     </div>
+    {% block content %}
 
     <div class="container">
 
@@ -55,7 +58,9 @@
       <p>DANGER</p>
 
     </div> <!-- /container -->
+    {% endblock content %}
 
+    {% block javascript %}
     <!-- Le javascript
     ==================================================
     Placed at the end of the document so the pages load faster
@@ -72,6 +77,6 @@
     <script src="/static/js/bootstrap-collapse.js"></script>
     <script src="/static/js/bootstrap-carousel.js"></script>
     <script src="/static/js/bootstrap-typeahead.js"></script> -->
-
+    {% endblock javascript %}
   </body>
 </html>

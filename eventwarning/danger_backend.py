@@ -4,7 +4,8 @@ from datetime import date
 import pylast
 import pprint
 import operator
-import api_keys
+from api_keys import *
+import songkick
 
 class EventStruct:
     title = None
@@ -15,10 +16,10 @@ class EventStruct:
     performers = []
     lfm_performers = []
     eventful_performers = []
-    
+
     def __init__(self, *args, **kwargs):
         for k, v in kwargs.items():
-            setattr(self, k, v)        
+            setattr(self, k, v)
         self.performers = []
         self.lfm_performers = []
         self.eventful_performers = []
@@ -29,21 +30,24 @@ def get_events_for_day(day):
     eventful = eventful_api.API('mtFH6X2rLdv7MGZX')
     eventful_date = day.strftime('%Y%m%d00')
     eventful_daterange = '%s-%s' % (eventful_date, eventful_date)
-    
+
     # Initialize Last.fm API:
     lfm = pylast.LastFMNetwork(api_key=LFM_KEY, api_secret=LFM_SEC)
-    
+
     # Initialize Foursquare API (userless):
     fsq = foursquare.Foursquare(client_id=FSQ_CID, client_secret=FSQ_SEC)
-    
+
+    # Initialize Songkick API:
+    sk = songkick.SongkickAPI(SK_KEY)
+
     page_number = 0
     max_pages = 1
     while page_number < max_pages:
         page_number += 1
-        events = eventful.call('/events/search', q='music', l='74103', 
+        events = eventful.call('/events/search', q='music', l='74103',
                           date=eventful_daterange, page_number=page_number)
         max_pages = int(events['page_count'])
-        
+
         event_list = events['events']['event']
         if type(event_list) != list:
             event_list = [event_list]
@@ -52,6 +56,8 @@ def get_events_for_day(day):
             venue_title = event['venue_name'].replace(u'\u2019', "'")
             venue_title = venue_title.encode('ascii', 'ignore')
             venue_coords = '%s,%s' % (event['latitude'], event['longitude'])
+            print venue_coords
+
             venues = fsq.venues.search(params=dict(
                     query=venue_title,
                     ll=venue_coords,
@@ -60,7 +66,12 @@ def get_events_for_day(day):
             )
             venue_guess = venues['venues'][0]
             checkins = venue_guess['hereNow']['count']
-            
+            venue_city = venue_guess['location']['city']
+
+            sk_venues_guess = sk.venue_search('%s %s' % (venue_title,
+                                                         venue_city))
+            print sk_venue_guess
+
             event_struct = EventStruct(
                 title=event['title'],
                 time=event['start_time'],
@@ -68,9 +79,9 @@ def get_events_for_day(day):
                 eventful_event=event,
                 fsq_venue=venue_guess
             )
-            
+
             ret_events.append(event_struct)
-            
+
             performers = event['performers']
             if performers:
                 performer = performers['performer']
@@ -92,22 +103,22 @@ def get_events_for_day(day):
     # TODO: sort by venue size, when that's available
     ret_events.sort(key=lambda a: a.venue)
     return ret_events
-    
+
 
 def danger_for_day(day):
     events = get_events_for_day(day)
     day_lfm_plays = 0
     day_eventful_demands = 0
-    
+
     for event in events:
         event_lfm_plays = 0
         for lfm_performer in event.lfm_performers:
             event_lfm_plays += lfm_performer.get_playcount()
-        
+
         event_eventful_demands = 0
         for eventful_performer in event.eventful_performers:
             event_eventful_demands += int(eventful_performer['demand_member_count'])
-        
+
         event_desc = '%s at %s (lfm:%i, eventful:%i)' % (
             event.title,
             event.venue,

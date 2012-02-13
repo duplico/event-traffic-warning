@@ -5,3 +5,4 @@ nose>=1.1.2
 Flask-WTF>=0.5.2
 eventful>=0.3
 lastfm>=0.1
+python-rest-client>=0.3
