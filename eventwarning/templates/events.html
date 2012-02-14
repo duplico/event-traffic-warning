@@ -1,0 +1,18 @@
+﻿{% extends "base.html" %}
+{% block title %}Event Warning{% endblock title %}
+{% block navbar %}
+{{ super() }}
+{% endblock navbar %}
+{% block content %}
+
+<div class="container">
+
+  <h1>Downtown Tulsa Event Danger</h1>
+  <p>DANGER</p>
+  {% for event in events %}
+    {{ event.title }} at {{ event.venue }}: {{ event.get_attendance_estimate() }} <br />
+  {% endfor %}
+  {{ total }}
+
+</div> <!-- /container -->
+{% endblock content %}

@@ -38,45 +38,59 @@
           <a class="brand" href="#">Event Danger</a>
           <div class="nav-collapse">
             <ul class="nav">
-              {% block breadcrumb %}
-                <li><a href="../../today/">Today</a></li>
+              {% block navbar %}
+                <li class="active"><a href="../../today/">Today</a></li>
                 <li><a href="../../tomorrow/">Tomorrow</a></li>
                 <li><a href="../../date/">Date</a></li>
                 <li><a href="/contact/">Report Problem</a></li>
                 <li><a href="/about/">About</a></li>
-              {% endblock breadcrumb %}
+              {% endblock navbar %}
             </ul>
+            <form class="navbar-search pull-right">
+              <input type="text" class="search-query" placeholder="{{ zip }}">
+            </form>
           </div><!--/.nav-collapse -->
         </div>
       </div>
     </div>
-    {% block content %}
-
     <div class="container">
-
-      <h1>Downtown Tulsa Event Danger</h1>
-      <p>DANGER</p>
-
+      {% block flash %}
+        <div class="row">
+          {% with messages = get_flashed_messages(with_categories=true) %}
+            {% if messages %}
+              {% for category, message in messages %}
+                <div class="alert alert-{{category}} fade in">
+                  <a class="close" data-dismiss="alert" href="#">×</a>
+                  {{ message }}
+                </div>
+              {% endfor %}
+            {% endif %}
+          {% endwith %}
+        </div> <!-- row -->
+      {% endblock %}
+      {% block content %}
+        <h1>Downtown Tulsa Event Danger</h1>
+        <p>DANGER</p>
+      {% endblock content %}
     </div> <!-- /container -->
-    {% endblock content %}
 
     {% block javascript %}
     <!-- Le javascript
     ==================================================
-    Placed at the end of the document so the pages load faster
+    Placed at the end of the document so the pages load faster -->
     <script src="/static/js/jquery.js"></script>
     <script src="/static/js/bootstrap-transition.js"></script>
     <script src="/static/js/bootstrap-alert.js"></script>
-    <script src="/static/js/bootstrap-modal.js"></script>
+    <script src="/static/js/bootstrap-collapse.js"></script>
+    {# <script src="/static/js/bootstrap-modal.js"></script>
     <script src="/static/js/bootstrap-dropdown.js"></script>
     <script src="/static/js/bootstrap-scrollspy.js"></script>
     <script src="/static/js/bootstrap-tab.js"></script>
     <script src="/static/js/bootstrap-tooltip.js"></script>
     <script src="/static/js/bootstrap-popover.js"></script>
     <script src="/static/js/bootstrap-button.js"></script>
-    <script src="/static/js/bootstrap-collapse.js"></script>
     <script src="/static/js/bootstrap-carousel.js"></script>
-    <script src="/static/js/bootstrap-typeahead.js"></script> -->
+    <script src="/static/js/bootstrap-typeahead.js"></script> #}
     {% endblock javascript %}
   </body>
 </html>

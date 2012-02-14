@@ -7,6 +7,8 @@ import operator
 from api_keys import *
 import songkick
 
+VERBOSE = True
+
 class EventStruct:
     title = None
     eventful_event = None
@@ -47,10 +49,10 @@ class EventStruct:
         attendance = min(capacity, attendance_possible)
         return attendance
 
-
-
     def venue_capacity_estimated(self):
         return not bool(self.venue_capacity)
+
+
 
 def get_events_for_day(day):
     ret_events = []
@@ -87,6 +89,8 @@ def get_events_for_day(day):
             venue_title = venue_title.encode('ascii', 'ignore')
             venue_coords = '%s,%s' % (event['latitude'], event['longitude'])
             venue_city = event['city_name']
+            if VERBOSE: print 'Producing an event record for the event titled "%s" at "%s":' % (event['title'], venue_title)
+            if VERBOSE: print '\tEventful venue is called "%s", attempting to normalize with Foursquare and Songkick' % venue_title
 
             venue_guess = None
             # TODO: we definitely need to normalize venues using foursquare
@@ -100,10 +104,11 @@ def get_events_for_day(day):
                     ll=venue_coords,
                     intent='match'
                 )
-            )
+            ) # TODO: we're matching the second stage here. :(
             fsq_venue_guess = venues['venues'][0]
             checkins = fsq_venue_guess['hereNow']['count']
             venue_guess = fsq_venue_guess['name']
+            if VERBOSE: print '\t\tFoursquare venue "%s" found' % venue_guess
 
             # Try to grab the capacity of the venue from Songkick:
             sk_venues_guess = sk.venue_search('%s %s' % (
@@ -114,6 +119,8 @@ def get_events_for_day(day):
             if sk_venues_guess:
                 sk_venue_guess = sk_venues_guess['venue'][0]
                 sk_capacity = sk_venue_guess['capacity']
+                if VERBOSE: print '\t\tSongkick venue "%s" found' % sk_venue_guess['displayName']
+                if VERBOSE: print '\t\tSongkick venue capacity %s' % str(sk_capacity)
 
             event_struct = EventStruct(
                 title=event['title'],
@@ -125,7 +132,7 @@ def get_events_for_day(day):
             )
 
             ret_events.append(event_struct)
-
+            if VERBOSE: print '\tLooking for performers:'
             performers = event['performers']
             if performers:
                 performer = performers['performer']
@@ -135,6 +142,7 @@ def get_events_for_day(day):
                 playcounts = []
                 for perf in performer:
                     performer_name = perf['name']
+                    if VERBOSE: print '\t\tFound performer "%s"' % performer_name
                     # Grab last.fm's first result for this artist:
                     lfm_search = lfm.search_for_artist(performer_name)
                     lfm_performer = lfm_search.get_next_page()[0]
@@ -144,8 +152,9 @@ def get_events_for_day(day):
                     event_struct.performers.append(performer_name)
                     event_struct.lfm_performers.append(lfm_performer)
                     event_struct.eventful_performers.append(eventful_performer)
-    # TODO: sort by venue size, when that's available
-    ret_events.sort(key=lambda a: '%s %s' % (a.venue, str(a.venue_capacity)))
+                    if VERBOSE: print '\t\tLast.fm performer: "%s" (%i)' % (lfm_performer.name, lfm_performer.get_playcount())
+    ret_events.sort(key=lambda a: a.venue)
+    ret_events.sort(key=lambda a: a.venue_capacity)
     return ret_events
 
 def attendance_for_events(events):
@@ -177,3 +186,18 @@ def print_day_summary(day):
         )
         print event_desc
     print 'Total estimate: %i' % attendance_for_events(events)
+
+def prioritize_events(events):
+    out_events = dict(useful=[], useless=[])
+    out_needs_info = []
+    for event in events:
+        if not event.performers:
+            out_events['useless'].append(event)
+        else:
+            out_events['useful'].append(event)
+        if not event.venue_capacity:
+            out_needs_info.append(event) # TODO: refactor
+    return out_events
+
+def prioritized_events_for_day(day):
+    return prioritize_events(get_events_for_day(day))
