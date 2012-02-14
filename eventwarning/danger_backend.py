@@ -95,14 +95,15 @@ def get_events_for_day(day):
             ##  care to diagnose at the moment. The issue is:
             ##  <http://code.google.com/p/python-rest-client/issues/detail?id=1>
             #
-            #venues = fsq.venues.search(params=dict(
-            #        query=venue_title,
-            #        ll=venue_coords,
-            #        intent='match'
-            #    )
-            #)
-            #venue_guess = venues['venues'][0]
-            #checkins = venue_guess['hereNow']['count']
+            venues = fsq.venues.search(params=dict(
+                    query=venue_title,
+                    ll=venue_coords,
+                    intent='match'
+                )
+            )
+            fsq_venue_guess = venues['venues'][0]
+            checkins = fsq_venue_guess['hereNow']['count']
+            venue_guess = fsq_venue_guess['name']
 
             # Try to grab the capacity of the venue from Songkick:
             sk_venues_guess = sk.venue_search('%s %s' % (

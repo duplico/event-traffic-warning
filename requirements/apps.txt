@@ -1,8 +1,8 @@
-foursquare>=20120210
-Flask>=0.8
+Flask==0.8
 Flask-CouchDB>=0.2.1
 nose>=1.1.2
 Flask-WTF>=0.5.2
 eventful>=0.3
-lastfm>=0.1
+pylast>=0.5.11
+-e git+https://github.com/mLewisLogic/foursquare.git@8dd71e273a#egg=foursquare
 python-rest-client>=0.3

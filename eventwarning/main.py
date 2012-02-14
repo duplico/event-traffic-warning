@@ -4,4 +4,5 @@ import pprint
 import danger_backend
 from datetime import date
 
-print "Today's danger: %i" % danger_backend.print_day_summary(date.today())
+if __name__=='__main__':
+    danger_backend.print_day_summary(date.today())
