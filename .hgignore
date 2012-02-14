@@ -3,3 +3,4 @@ syntax: regexp
 syntax: glob
 src/eventwarning/api_keys.py
 event-warning.komodoproject
+eventwarning/.cache/*
