@@ -6,37 +6,31 @@ from flask.ext.couchdb import *
 from eventwarning import couchdb_manager
 
 class DangerEntry(Document):
+    """
+    Represents one day's events at one location.
+    """
     doc_type = 'danger_entry'
-    title = TextField()
-    time = DateTimeField()
-    venue = TextField()
-    performers = ListField(TextField())
+    location = TextField() # Zip code
+    date = DateField()
 
-    fsq_venue = DictField()
-    lfm_performers = ListField(DictField())
-    eventful_performers = ListField(DictField())
-    eventful_event = DictField()
-
+    events = ListField(
+        DictField(Mapping.build(
+            title = TextField(),
+            time = DateTimeField,
+            venue_name = TextField(),
+            venue_fsq = DictField(),
+            venue_songkick = DictField(),
+            venue_capacity = IntegerField(),
+            performers_names = ListField(TextField()),
+            performers_lfm = ListField(DictField()),
+            performers_eventful = ListField(DictField()), # TODO: don't use?
+            event_eventful = DictField(),
+            event_songkick = DictField()
+        ))
+    )
     updated = DateTimeField(default=datetime.datetime.now())
 
 couchdb_manager.add_document(DangerEntry)
-
-class EventStruct:
-    title = None
-    eventful_event = None
-    time = None
-    venue = None
-    fsq_venue = None
-    performers = []
-    lfm_performers = []
-    eventful_performers = []
-
-    def __init__(self, *args, **kwargs):
-        for k, v in kwargs.items():
-            setattr(self, k, v)
-        self.performers = []
-        self.lfm_performers = []
-        self.eventful_performers = []
 #
 #class User(Document, UserMixin):
 #    doc_type = 'user'

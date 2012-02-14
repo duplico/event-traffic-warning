@@ -4,3 +4,5 @@ syntax: glob
 event-warning.komodoproject
 eventwarning/.cache/*
 eventwarning/api_keys.py
+.cache/*
+src/*

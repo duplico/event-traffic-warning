@@ -21,7 +21,7 @@ couchdb_manager = CouchDBManager(auto_sync=False)
 
 couchdb_manager.setup(app)
 # do stuff (set up more app things, maybe make some objects)
-
+app.secret_key='ju=l8}C@+.D@ncYtU+mKw*}utALB1<'
 couchdb_manager.sync(app)
 
 import views
