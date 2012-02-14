@@ -1,6 +1,6 @@
 syntax: regexp
 \.pyc$
 syntax: glob
-src/eventwarning/api_keys.py
 event-warning.komodoproject
 eventwarning/.cache/*
+eventwarning/api_keys.py
