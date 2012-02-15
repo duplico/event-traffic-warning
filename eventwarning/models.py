@@ -28,6 +28,7 @@ class DangerEntry(Document):
             event_eventful = DictField(),
             event_songkick = DictField(),
             attendance_estimate = IntegerField(),
+            lastfm_plays = IntegerField(),
         ))
     )
     updated = DateTimeField(default=datetime.datetime.now())
@@ -83,6 +84,7 @@ def get_or_create_danger_entry(day, zip):
             event_eventful=event.eventful_event,
             event_songkick={},
             attendance_estimate=event.get_attendance_estimate(),
+            lastfm_plays=event.get_lfm_plays(),
         )
         events.append(event_db)
     danger_record = DangerEntry(
