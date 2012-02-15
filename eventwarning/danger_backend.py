@@ -111,6 +111,7 @@ def get_events_for_day(day):
             if VERBOSE: print '\t\tFoursquare venue "%s" found' % venue_guess
 
             # Try to grab the capacity of the venue from Songkick:
+            sk_venue_guess = None
             sk_venues_guess = sk.venue_search('%s %s' % (
                 venue_guess or venue_title,
                 venue_city
@@ -128,7 +129,8 @@ def get_events_for_day(day):
                 venue=venue_title,
                 eventful_event=event,
                 venue_capacity=sk_capacity or 0,
-                fsq_venue=venue_guess,
+                fsq_venue=fsq_venue_guess,
+                sk_venue=sk_venue_guess,
             )
 
             ret_events.append(event_struct)

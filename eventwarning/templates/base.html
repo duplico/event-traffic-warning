@@ -46,16 +46,19 @@
                 <li><a href="/about/">About</a></li>
               {% endblock navbar %}
             </ul>
-            <form class="navbar-search pull-right">
-              <input type="text" class="search-query" placeholder="{{ zip }}">
+            <form class="navbar-search pull-right form-inline">
+              <label class="control-label" for="zip">
+                <i class="icon-map-marker icon-white"></i>
+              </label>
+              <input type="text" class="search-query" id="zip" placeholder="{{ zip }}">
             </form>
           </div><!--/.nav-collapse -->
         </div>
       </div>
     </div>
-    <div class="container">
+    <div class="container-fluid">
       {% block flash %}
-        <div class="row">
+        <div class="row-fluid">
           {% with messages = get_flashed_messages(with_categories=true) %}
             {% if messages %}
               {% for category, message in messages %}
@@ -69,8 +72,6 @@
         </div> <!-- row -->
       {% endblock %}
       {% block content %}
-        <h1>Downtown Tulsa Event Danger</h1>
-        <p>DANGER</p>
       {% endblock content %}
     </div> <!-- /container -->
 

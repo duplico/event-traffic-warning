@@ -8,9 +8,10 @@ import danger_backend as danger
 #danger.VERBOSE = False
 
 from eventwarning import app
+from eventwarning import models
 
 # /
-# /zip/<zip>/<date>
+# /zip/<zip>/d/<date>
 #
 #
 
@@ -22,9 +23,15 @@ def landing():
 def danger_zip(zip, date):
     day_obj = datetime.strptime(date, '%Y-%m-%d').date()
 
-    events = danger.prioritized_events_for_day(day_obj)
-    total = danger.attendance_for_events(events['useful'])
+    events = models.get_or_create_danger_entry(day_obj, zip)
+    events_prioritized = events.prioritized()
 
-    return render_template('events.html', zip=zip, events=events['useful'],
-                           other_events=events['useless'], total=total)
+    return render_template(
+        'events.html',
+        zip=zip,
+        events=events_prioritized['useful'],
+        other_events=events_prioritized['useless'],
+        total=events.total(),
+        day=day_obj,
+    )
 
