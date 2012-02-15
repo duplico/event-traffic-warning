@@ -4,6 +4,7 @@ import flask
 from flask.ext.couchdb import *
 
 from eventwarning import couchdb_manager
+from eventwarning import danger_backend as danger
 
 class DangerEntry(Document):
     """
@@ -16,7 +17,7 @@ class DangerEntry(Document):
     events = ListField(
         DictField(Mapping.build(
             title = TextField(),
-            time = DateTimeField,
+            time = DateTimeField(),
             venue_name = TextField(),
             venue_fsq = DictField(),
             venue_songkick = DictField(),
@@ -25,12 +26,74 @@ class DangerEntry(Document):
             performers_lfm = ListField(DictField()),
             performers_eventful = ListField(DictField()), # TODO: don't use?
             event_eventful = DictField(),
-            event_songkick = DictField()
+            event_songkick = DictField(),
+            attendance_estimate = IntegerField(),
         ))
     )
     updated = DateTimeField(default=datetime.datetime.now())
 
+    def prioritized(self):
+        out_events = dict(useful=[], useless=[])
+        out_needs_info = []
+        for event in self.events:
+            if not event['performers_names']:
+                out_events['useless'].append(event)
+            else:
+                out_events['useful'].append(event)
+            if not event['venue_capacity']:
+                out_needs_info.append(event) # TODO: refactor
+        return out_events
+
+    def total(self):
+        attendance_total = 0
+        for event in self.events:
+            attendance_total += event.get('attendance_estimate', 0)
+        return attendance_total
+
 couchdb_manager.add_document(DangerEntry)
+
+def get_or_create_danger_entry(day, zip):
+    id = '/dangers/zip/%s/d/%s' % (zip, day.strftime('%Y-%m-%d'))
+    danger_record = DangerEntry.load(id)
+    if danger_record:
+        return danger_record
+    #    return danger_record
+
+    events = []
+    # TODO: refactor
+    event_structs = danger.get_events_for_day(day)
+    for event in event_structs:
+        lfm_performers = []
+        for performer in event.lfm_performers:
+            lfm_performers.append(dict(
+                name=str(performer.name),
+                playcount=int(performer.get_playcount()),
+                url=str(performer.get_url()),
+            ))
+        event_db = dict(
+            title=event.title,
+            time=datetime.datetime.strptime(event.time, '%Y-%m-%d %H:%M:%S'),
+            venue_name=event.venue,
+            venue_fsq=event.fsq_venue,
+            venue_songkick=event.sk_venue,
+            venue_capacity=event.venue_capacity,
+            performers_names=event.performers,
+            performers_lfm=lfm_performers,
+            performers_eventful=event.eventful_performers,
+            event_eventful=event.eventful_event,
+            event_songkick={},
+            attendance_estimate=event.get_attendance_estimate(),
+        )
+        events.append(event_db)
+    danger_record = DangerEntry(
+        location=zip,
+        date=day,
+        events=events,
+    )
+    danger_record.id = id
+    danger_record.store()
+    return danger_record
+
 #
 #class User(Document, UserMixin):
 #    doc_type = 'user'
