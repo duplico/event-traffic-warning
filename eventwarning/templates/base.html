@@ -39,19 +39,37 @@
           <div class="nav-collapse">
             <ul class="nav">
               {% block navbar %}
-                <li class="active"><a href="../../today/">Today</a></li>
-                <li><a href="../../tomorrow/">Tomorrow</a></li>
-                <li><a href="../../date/">Date</a></li>
-                <li><a href="/contact/">Report Problem</a></li>
-                <li><a href="/about/">About</a></li>
+                <li class="dropdown {% block dateclass %}{% endblock %}">
+                  <a href="#" class="dropdown-toggle" data-toggle="dropdown">
+                    <i class="icon-calendar icon-white"></i> {{ day|default('Date') }}
+                    <b class="caret"></b>
+                  </a>
+                  <ul class="dropdown-menu">
+                    <li><a href="#">Today</a></li>
+                    <li><a href="#">Tomorrow</a></li>
+                  </ul>
+                </li>
+                <li class="dropdown {% block zipclass %}{% endblock %}">
+                  <a href="#" class="dropdown-toggle" data-toggle="dropdown">
+                    <i class="icon-map-marker icon-white"></i> {{ zip|default('Zip') }}
+                    <b class="caret"></b>
+                  </a>
+                  <ul class="dropdown-menu">
+                      <form class="form-inline form-horizontal" style="margin-bottom:0px">
+                        <li>
+                        <label class="control-label" for="zip">
+                          Zip code
+                        </label>
+                        <input type="text" class="input-small" id="zip" placeholder="{{ zip }}">
+                        </li>
+                      </form>
+                  </ul>
+                </li>
+                <li class="{% block goclass %}{% endblock %}"><a href="">Go</a></li>
+                {# <li><a href="/contact/">Report Problem {% block problemclass %}{% endblock %}</a></li>
+                <li><a href="/about/">About {% block aboutclass %}{% endblock %}</a></li> #}
               {% endblock navbar %}
             </ul>
-            <form class="navbar-search pull-right form-inline">
-              <label class="control-label" for="zip">
-                <i class="icon-map-marker icon-white"></i>
-              </label>
-              <input type="text" class="search-query" id="zip" placeholder="{{ zip }}">
-            </form>
           </div><!--/.nav-collapse -->
         </div>
       </div>
@@ -83,8 +101,8 @@
     <script src="/static/js/bootstrap-transition.js"></script>
     <script src="/static/js/bootstrap-alert.js"></script>
     <script src="/static/js/bootstrap-collapse.js"></script>
-    {# <script src="/static/js/bootstrap-modal.js"></script>
     <script src="/static/js/bootstrap-dropdown.js"></script>
+    {# <script src="/static/js/bootstrap-modal.js"></script>
     <script src="/static/js/bootstrap-scrollspy.js"></script>
     <script src="/static/js/bootstrap-tab.js"></script>
     <script src="/static/js/bootstrap-tooltip.js"></script>
@@ -92,6 +110,11 @@
     <script src="/static/js/bootstrap-button.js"></script>
     <script src="/static/js/bootstrap-carousel.js"></script>
     <script src="/static/js/bootstrap-typeahead.js"></script> #}
+    <script type="text/javascript">
+      $('.dropdown-menu').find('form').click(function (e) {
+        e.stopPropagation();
+      });
+    </script>
     {% endblock javascript %}
   </body>
 </html>

@@ -57,6 +57,7 @@ class EventStruct:
 def get_events_for_day(day):
     ret_events = []
     # Initialize eventful API:
+    # TODO: try searching using songkick first?
     eventful = eventful_api.API('mtFH6X2rLdv7MGZX')
     eventful_date = day.strftime('%Y%m%d00')
     eventful_daterange = '%s-%s' % (eventful_date, eventful_date)
