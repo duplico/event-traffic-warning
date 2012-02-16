@@ -1,10 +1,48 @@
 import datetime
+import re
 
 import flask
 from flask.ext.couchdb import *
+from unidecode import unidecode
 
 from eventwarning import couchdb_manager
 from eventwarning import danger_backend as danger
+
+class ZipCode(Document):
+    """
+    Geocodes a zip code.
+    """
+    doc_type = 'zip'
+    zip = TextField() # Zip code
+    lat = TextField()
+    lon = TextField()
+    city = TextField()
+
+couchdb_manager.add_document(ZipCode)
+
+def store_all_zips(path_to_csv, db=None):
+    """
+    Build a stored zip code database. This must be done before running the app.
+
+    CSV format:
+    "zipcode";"state";"fips_regions";"city";"latitude";"longitude"
+    """
+    num_re = re.compile('[0-9]+')
+    for line in open(path_to_csv):
+        components = line.split(';')
+        # Remove quotes:
+        components = map(lambda a: unidecode(a.strip()[1:-1]), components)
+        zip = components[0]
+        # Heading/non number zip:
+        if not num_re.match(zip):
+            continue
+        id = '/locations/zip/%s' % zip
+        if ZipCode.load(id, db=db):
+            continue
+        city, lat, long = components[3:]
+        zc_doc = ZipCode(zip=zip, lat=lat, lon=long, city=city)
+        zc_doc.id = id
+        zc_doc.store(db=db)
 
 class DangerEntry(Document):
     """

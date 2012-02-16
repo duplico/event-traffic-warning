@@ -9,6 +9,7 @@ import danger_backend as danger
 
 from eventwarning import app
 from eventwarning import models
+from eventwarning import executor, running_futures
 
 # /
 # /zip/<zip>/d/<date>
@@ -35,3 +36,21 @@ def danger_zip(zip, date):
         day=day_obj,
     )
 
+@app.route('/locations/index_zips/', methods=['POST',])
+def index_zips():
+    # curl -X POST http://localhost:5000/locations/index_zips/?key=ADMIN_SECRET
+    if request.args.get('key', None) == app.config.get('ADMIN_SECRET'):
+        if 'index_zips' in running_futures:
+            print 'in'
+            if running_futures['index_zips'].done():
+                return make_response('/locations/\n', 200)
+            else:
+                return make_response('In progress\n', 202)
+        else:
+            task = executor.submit(models.store_all_zips,
+                                   app.config.get('ZIP_DB'),
+                                   db=flask.g.couch)
+            running_futures['index_zips'] = task
+        return make_response('Job started\n', 202)
+    else:
+        return make_response('INVALID SECRET\n', 403)
