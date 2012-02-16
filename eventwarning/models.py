@@ -6,7 +6,7 @@ from flask.ext.couchdb import *
 from unidecode import unidecode
 
 from eventwarning import couchdb_manager
-from eventwarning import danger_backend as danger
+import danger_backend as danger
 
 class ZipCode(Document):
     """

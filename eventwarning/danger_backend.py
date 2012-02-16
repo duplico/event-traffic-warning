@@ -6,6 +6,7 @@ import pprint
 import operator
 from api_keys import *
 import songkick
+import models
 
 VERBOSE = True
 
@@ -53,7 +54,15 @@ class EventStruct:
         return not bool(self.venue_capacity)
 
 def songkick_events_for_day(day, zip):
-    pass
+    sk = songkick.SongkickAPI(SK_KEY)
+
+    loc_db = models.ZipCode.get(zip)
+    loc = 'geo:%s,%s' % (loc_db.lat, loc_db.lon)
+    date = day.strftime('%Y-%m-%d')
+    all_events = sk.event_search(location=loc, min_date=date, max_date=date)
+    zip_events = []
+    for event in all_events:
+        print event['venue']
 
 def get_events_for_day(day):
     ret_events = []
@@ -120,7 +129,7 @@ def get_events_for_day(day):
             ))
             sk_capacity = 0 # Unknown
             if sk_venues_guess:
-                sk_venue_guess = sk_venues_guess['venue'][0]
+                sk_venue_guess = sk_venues_guess[0]
                 sk_capacity = sk_venue_guess['capacity']
                 if VERBOSE: print '\t\tSongkick venue "%s" found' % sk_venue_guess['displayName']
                 if VERBOSE: print '\t\tSongkick venue capacity %s' % str(sk_capacity)
@@ -138,6 +147,8 @@ def get_events_for_day(day):
             ret_events.append(event_struct)
             if VERBOSE: print '\tLooking for performers:'
             performers = event['performers']
+            sk_event = None
+
             if performers:
                 performer = performers['performer']
                 if type(performer) == dict:
@@ -146,6 +157,14 @@ def get_events_for_day(day):
                 playcounts = []
                 for perf in performer:
                     performer_name = perf['name']
+
+                    print sk.event_search(
+                        artist_name=performer_name,
+                        location='geo:%s' % venue_coords,
+                        min_date=day.strftime('%Y-%m-%d'),
+                        max_date=day.strftime('%Y-%m-%d'),
+                    )
+
                     if VERBOSE: print '\t\tFound performer "%s"' % performer_name
                     # Grab last.fm's first result for this artist:
                     lfm_search = lfm.search_for_artist(performer_name)
