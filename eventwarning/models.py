@@ -17,6 +17,7 @@ class ZipCode(Document):
     lat = TextField()
     lon = TextField()
     city = TextField()
+    state = TextField()
 
 couchdb_manager.add_document(ZipCode)
 
@@ -39,8 +40,8 @@ def store_all_zips(path_to_csv, db=None):
         id = '/locations/zip/%s' % zip
         if ZipCode.load(id, db=db):
             continue
-        city, lat, long = components[3:]
-        zc_doc = ZipCode(zip=zip, lat=lat, lon=long, city=city)
+        state, regions, city, lat, long = components[1:]
+        zc_doc = ZipCode(zip=zip, lat=lat, lon=long, city=city, state=state)
         zc_doc.id = id
         zc_doc.store(db=db)
 
