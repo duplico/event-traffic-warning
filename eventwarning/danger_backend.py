@@ -52,7 +52,8 @@ class EventStruct:
     def venue_capacity_estimated(self):
         return not bool(self.venue_capacity)
 
-
+def songkick_events_for_day(day, zip):
+    pass
 
 def get_events_for_day(day):
     ret_events = []

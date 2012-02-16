@@ -6,3 +6,5 @@ eventful>=0.3
 pylast>=0.5.11
 -e git+https://github.com/mLewisLogic/foursquare.git@8dd71e273a#egg=foursquare
 python-rest-client>=0.3
+unidecode>=0.04.9
+futures>=2.1.2
