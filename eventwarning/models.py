@@ -93,6 +93,9 @@ class DangerEntry(Document):
 couchdb_manager.add_document(DangerEntry)
 
 def get_or_create_danger_entry(day, zip):
+    # TODO: base this off of the new dictionary format returned
+    #   in ~danger_backend.py:161.
+
     id = '/dangers/zip/%s/d/%s' % (zip, day.strftime('%Y-%m-%d'))
     danger_record = DangerEntry.load(id)
     if danger_record:
@@ -132,7 +135,7 @@ def get_or_create_danger_entry(day, zip):
         events=events,
     )
     danger_record.id = id
-    danger_record.store()
+    #danger_record.store()
     return danger_record
 
 #
