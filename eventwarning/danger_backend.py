@@ -7,6 +7,7 @@ import operator
 from api_keys import *
 import songkick
 import models
+import flask
 
 VERBOSE = True
 
@@ -53,131 +54,123 @@ class EventStruct:
     def venue_capacity_estimated(self):
         return not bool(self.venue_capacity)
 
+def get_sk_performer_list(event, fsq=None, lfm=None):
+    if not fsq:
+        fsq = foursquare.Foursquare(client_id=FSQ_CID, client_secret=FSQ_SEC)
+    if not lfm:
+        lfm = pylast.LastFMNetwork(api_key=LFM_KEY, api_secret=LFM_SEC)
+    sk_performers = []
+    performers = event['performance']
+    for performer in performers:
+        print performer['artist']['identifier']
+        mbid = None
+        if performer['artist']['identifier']: # TODO: handle longer than 1?
+            assert len(performer['artist']['identifier'])==1
+            mbid = performer['artist']['identifier'][0].get('mbid', None)
+
+        lfm_performer = get_lfm_performer(
+            mbid=mbid,
+            name=performer['artist']['displayName'],
+            lfm=lfm
+        )
+        sk_performers.append(lfm_performer)
+    return sk_performers
+
 def songkick_events_for_day(day, zip):
     sk = songkick.SongkickAPI(SK_KEY)
-
-    loc_db = models.ZipCode.get(zip)
+    loc_db = models.ZipCode.load('/locations/zip/%s' % zip)
     loc = 'geo:%s,%s' % (loc_db.lat, loc_db.lon)
     date = day.strftime('%Y-%m-%d')
     all_events = sk.event_search(location=loc, min_date=date, max_date=date)
     zip_events = []
     for event in all_events:
-        print event['venue']
+        venue = sk.venue_details(event['venue']['id'])
+        if venue['zip'] == zip:
+            zip_events.append((event, venue, get_sk_performer_list(event)))
+    return zip_events
+
+def get_foursquare_venue_normalization(sk_venue, fsq=None):
+    if not fsq:
+        fsq = foursquare.Foursquare(client_id=FSQ_CID, client_secret=FSQ_SEC)
+    venue_url_sk = sk_venue['uri']
+
+    # First try searching by songkick venue URL:
+    venue_guesses = fsq.venues.search(params=dict(
+        url=venue_url_sk
+    ))['venues']
+
+    # If we get any results, pick the first one:
+    if venue_guesses:
+        fsq_venue = venue_guesses[0]
+    else:
+        # TODO: We're going to need to get it some other way
+        fsq_venue = None
+        assert False # crash.
+
+    return fsq_venue
+
+def get_lfm_performer(mbid=None, name=None, lfm=None):
+    if not lfm:
+        lfm = pylast.LastFMNetwork(api_key=LFM_KEY, api_secret=LFM_SEC)
+    assert mbid or name
+    artist = None
+    if mbid:
+        artist = lfm.get_artist_by_mbid(mbid)
+    if name and not mbid or not artist:
+        artist = lfm.get_artist(name)
+    artist_dict = {}
+    if artist:
+        artist_dict.update(
+            name=artist.name,
+            playcount=artist.get_playcount(),
+            mbid=artist.get_mbid(),
+            url=artist.get_url()
+        )
+    return artist_dict
+
+def get_eventful_performer_list(lfm, event):
+    raise NotImplementedError()
 
 def get_events_for_day(day):
     ret_events = []
-    # Initialize eventful API:
-    # TODO: try searching using songkick first?
-    eventful = eventful_api.API('mtFH6X2rLdv7MGZX')
-    eventful_date = day.strftime('%Y%m%d00')
-    eventful_daterange = '%s-%s' % (eventful_date, eventful_date)
-
-    # Initialize Last.fm API:
-    lfm = pylast.LastFMNetwork(api_key=LFM_KEY, api_secret=LFM_SEC)
-
-    # Initialize Foursquare API (userless):
-    fsq = foursquare.Foursquare(client_id=FSQ_CID, client_secret=FSQ_SEC)
 
     # Initialize Songkick API:
     sk = songkick.SongkickAPI(SK_KEY)
+    # Initialize Foursquare API (userless):
+    fsq = foursquare.Foursquare(client_id=FSQ_CID, client_secret=FSQ_SEC)
+    # Initialize Last.fm API:
+    lfm = pylast.LastFMNetwork(api_key=LFM_KEY, api_secret=LFM_SEC)
 
-    page_number = 0
-    max_pages = 1
-    while page_number < max_pages:
-        page_number += 1
-        events = eventful.call('/events/search', q='music', l='74103',
-                          date=eventful_daterange, page_number=page_number)
-        if events['total_items'] == '0':
-            return []
-        max_pages = int(events['page_count'])
+    # Grab the day's events in the desired zip code:
+    songkick_event_venues = songkick_events_for_day(day, '74103')
 
-        event_list = events['events']['event']
-        if type(event_list) != list:
-            event_list = [event_list]
+    # TODO: grab eventful's events for the same area/day
+    # TODO: merge them
 
-        for event in event_list:
-            venue_title = event['venue_name'].replace(u'\u2019', "'")
-            venue_title = venue_title.encode('ascii', 'ignore')
-            venue_coords = '%s,%s' % (event['latitude'], event['longitude'])
-            venue_city = event['city_name']
-            if VERBOSE: print 'Producing an event record for the event titled "%s" at "%s":' % (event['title'], venue_title)
-            if VERBOSE: print '\tEventful venue is called "%s", attempting to normalize with Foursquare and Songkick' % venue_title
+    event_venues = songkick_event_venues
 
-            venue_guess = None
-            # TODO: we definitely need to normalize venues using foursquare
-            ## For some reason the foursquare support is broken on my machine
-            ##  due to some kind of httplib2 timeout weirdness that I don't
-            ##  care to diagnose at the moment. The issue is:
-            ##  <http://code.google.com/p/python-rest-client/issues/detail?id=1>
-            #
-            venues = fsq.venues.search(params=dict(
-                    query=venue_title,
-                    ll=venue_coords,
-                    intent='match'
-                )
-            ) # TODO: we're matching the second stage here. :(
-            fsq_venue_guess = venues['venues'][0]
-            checkins = fsq_venue_guess['hereNow']['count']
-            venue_guess = fsq_venue_guess['name']
-            if VERBOSE: print '\t\tFoursquare venue "%s" found' % venue_guess
+    # Now, let's check out each event individually:
+    for event, venue, performers in event_venues:
+        event_name = event['displayName']
+        venue_name = venue['displayName']
+        venue_url_sk = venue['uri']
+        venue_capacity = venue['capacity'] or 0
+        if VERBOSE: print 'Producing an event record for the event titled "%s" at "%s":' % (event['displayName'], venue['displayName'])
+        fsq_venue = get_foursquare_venue_normalization(venue, fsq=fsq)
+        checkins = fsq_venue['hereNow']['count']
+        if VERBOSE: print '\t\tFoursquare venue "%s" found' % fsq_venue['name']
+        if VERBOSE: print '\t\tSongkick venue capacity %s' % str(venue_capacity)
 
-            # Try to grab the capacity of the venue from Songkick:
-            sk_venue_guess = None
-            sk_venues_guess = sk.venue_search('%s %s' % (
-                venue_guess or venue_title,
-                venue_city
-            ))
-            sk_capacity = 0 # Unknown
-            if sk_venues_guess:
-                sk_venue_guess = sk_venues_guess[0]
-                sk_capacity = sk_venue_guess['capacity']
-                if VERBOSE: print '\t\tSongkick venue "%s" found' % sk_venue_guess['displayName']
-                if VERBOSE: print '\t\tSongkick venue capacity %s' % str(sk_capacity)
-
-            event_struct = EventStruct(
-                title=event['title'],
-                time=event['start_time'],
-                venue=venue_title,
-                eventful_event=event,
-                venue_capacity=sk_capacity or 0,
-                fsq_venue=fsq_venue_guess,
-                sk_venue=sk_venue_guess,
-            )
-
-            ret_events.append(event_struct)
-            if VERBOSE: print '\tLooking for performers:'
-            performers = event['performers']
-            sk_event = None
-
-            if performers:
-                performer = performers['performer']
-                if type(performer) == dict:
-                    performer = [performer]
-                # performer is a list:
-                playcounts = []
-                for perf in performer:
-                    performer_name = perf['name']
-
-                    print sk.event_search(
-                        artist_name=performer_name,
-                        location='geo:%s' % venue_coords,
-                        min_date=day.strftime('%Y-%m-%d'),
-                        max_date=day.strftime('%Y-%m-%d'),
-                    )
-
-                    if VERBOSE: print '\t\tFound performer "%s"' % performer_name
-                    # Grab last.fm's first result for this artist:
-                    lfm_search = lfm.search_for_artist(performer_name)
-                    lfm_performer = lfm_search.get_next_page()[0]
-                    # Grab eventful's data for this performer:
-                    eventful_performer = eventful.call('/performers/get', id=perf['id'])
-                    # Store it:
-                    event_struct.performers.append(performer_name)
-                    event_struct.lfm_performers.append(lfm_performer)
-                    event_struct.eventful_performers.append(eventful_performer)
-                    if VERBOSE: print '\t\tLast.fm performer: "%s" (%i)' % (lfm_performer.name, lfm_performer.get_playcount())
-    ret_events.sort(key=lambda a: a.venue)
-    ret_events.sort(key=lambda a: a.venue_capacity)
+        event_record = dict(
+            title=event_name,
+            # TODO: time,
+            venue_name=venue_name,
+            venue_capacity=venue_capacity,
+            performers_names=map(lambda a: a['name'], performers),
+            performers_playcounts=map(lambda a: a['playcount'], performers),
+        )
+        print event_record
+        ret_events.append(event_record)
     return ret_events
 
 def attendance_for_events(events):
