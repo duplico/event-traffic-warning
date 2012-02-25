@@ -11,61 +11,204 @@ import flask
 
 VERBOSE = True
 
-class EventStruct:
-    title = None
-    eventful_event = None
-    time = None
-    venue = None
-    venue_capacity = 0
-    fsq_venue = None
-    performers = []
-    lfm_performers = []
-    eventful_performers = []
+### Event handling helper functions ###
 
-    def __init__(self, *args, **kwargs):
-        for k, v in kwargs.items():
-            setattr(self, k, v)
-        self.performers = []
-        self.lfm_performers = []
-        self.eventful_performers = []
+def songkick_events_for_day(day, zip):
+    """
+    Given a date object `day` and a `zip`, finds and returns events from
+    Songkick.
 
-    def get_lfm_plays(self):
-        return reduce(operator.add, (
-            lfm_performer.get_playcount() \
-                for lfm_performer in self.lfm_performers
-        ), 0)
+    The returned events are in a more or less API-agnostic format, so they
+    should be suitably normalized so as to be mergeable with, say, Eventful
+    events if so desired.
 
-    def get_eventful_demands(self):
-        return reduce(operator.add, (
-            int(eventful_performer['demand_member_count']) \
-                for eventful_performer in self.eventful_performers
-        ), 0)
+    Parameters
+    ==========
 
-    def get_attendance_estimate(self):
-        # If we don't know the capacity, we'll assume it's bar sized.
-        # Otherwise we'll need to fix the venue on songkick.
-        capacity = self.venue_capacity or 100
-        lfm_plays = self.get_lfm_plays()
-        attendance_possible = lfm_plays / 500.0
-        # Also there should probably be a venue size penalty
-        attendance = min(capacity, attendance_possible)
-        return attendance
+        `day`
+            The date for the search, a Python datetime or date object.
 
-    def venue_capacity_estimated(self):
-        return not bool(self.venue_capacity)
+        `zip`
+            The zip code to search in, a string.
 
-def get_sk_performer_list(event, fsq=None, lfm=None):
-    if not fsq:
-        fsq = foursquare.Foursquare(client_id=FSQ_CID, client_secret=FSQ_SEC)
+    Returns
+    =======
+
+        A list of 3-tuples of the following format:
+
+        ``(
+            event,
+            venue,
+            performers
+        )``
+
+        where:
+
+        `event`
+            The DangerEntry-formatted dictionary of event-only details as
+            returned by `songkick_event_to_danger_event`.
+
+        `venue`
+            The DangerEntry-formatted dictionary of the event's venue, as
+            returned by `songkick_event_to_venue_dict`.
+
+        `performers`
+            A list of the event's performers, as normalized to Last.fm and
+            returned by `get_sk_performer_list` in dictionary format.
+
+    """
+    sk = songkick.SongkickAPI(SK_KEY)
+    loc_db = models.ZipCode.load('/locations/zip/%s' % zip)
+    loc = 'geo:%s,%s' % (loc_db.lat, loc_db.lon)
+    date = day.strftime('%Y-%m-%d')
+    all_events = sk.event_search(location=loc, min_date=date, max_date=date)
+    zip_events = []
+    for event in all_events:
+        venue_sk = sk.venue_details(event['venue']['id'])
+        if venue_sk['zip'] == zip:
+            zip_events.append((
+                songkick_event_to_danger_event(event),
+                songkick_event_to_venue_dict(event, venue_sk=venue_sk, sk=sk),
+                get_sk_performer_list(event)
+            ))
+    return zip_events
+
+def songkick_event_to_danger_event(event_sk):
+    """
+    Given a raw songkick event `event_sk` returns a more `models.DangerEntry`
+    compatible dictionary.
+
+    No venue or performer data is encoded.
+
+    Parameters
+    ==========
+
+    `event_sk`
+        A raw Songkick event
+
+    Returns
+    =======
+
+    A dictionary representing the event with the following fields:
+
+    `title`
+        The display name of the event
+
+    `url_sk`
+        The URL for the Songkick event page for the event
+
+    `time`
+        A Datetime object representing the start time of the event. Currently
+        non-working.
+    """
+
+    return dict(
+        title = event_sk['displayName'],
+        url_sk = event_sk['uri'],
+        # time=datetime.datetime.strptime(
+        #    event_sk['start']['datetime'],
+        #    '%Y-%m-%dT%H:%M:%S%z' # ?????
+        #)
+    )
+
+def songkick_event_to_venue_dict(event_sk, venue_sk=None, sk=None):
+    """
+    Given a raw songkick event `event_sk` returns a more `models.DangerEntry`
+    compatible venue dictionary.
+
+    Parameters
+    ==========
+
+    `event_sk`
+        A raw Songkick event
+
+    `venue_sk`
+        A raw Songkick venue detail object, or None to look it up.
+
+    `sk`
+        A connected Songkick API object, or None to create a new one.
+
+    Returns
+    =======
+
+    A dictionary representing the event's venue with the following fields:
+
+    `name`
+        The display name of the venue (via Songkick).
+
+    `capacity`
+        The venue's capacity as reported by Songkick, or `None` if unknown.
+
+    `url_sk`
+        The URL for the Songkick page for the venue.
+
+    `id_fsq`
+        Our guess at the Foursquare ID of the venue.
+    """
+
+    if not sk:
+        sk = songkick.SongkickAPI(SK_KEY)
+
+    if not venue_sk:
+        venue_sk = sk.venue_details(event_sk['venue']['id'])
+
+    venue_fsq = get_foursquare_venue_normalization(venue_sk)
+
+    return dict(
+        name = venue_sk['displayName'],
+        capacity = venue_sk['capacity'],
+        url_sk = venue_sk['uri'],
+        id_fsq = venue_fsq['id'],
+    )
+
+### Performer handling ###
+
+def get_sk_performer_list(event, lfm=None):
+    """
+    Given a raw Songkick `event` and optional last.fm API `lfm` return
+    a list of the event's performers.
+
+    For now, we are assuming that each performer['artist']['identifier'] list
+    has length 1, which is an assertion. I'm unsure of the Songkick contract
+    regarding identifier lists, so this may or may not be a bad assumption to
+    make.
+
+    If a last.fm performer lookup fails, rather than trying to guess at what
+    to call the performer, we just skip it. In the future, some guess might be
+    valuable.
+
+    Parameters
+    ==========
+
+    `event`
+        The raw event as returned from the Songkick API
+
+    `lfm`
+        An initialized pylast LastFMNetwork object, or None to use a new one.
+
+    Returns
+    =======
+
+    A list of dictionaries representing performers as returned by
+    `get_lfm_performer`. The dictionary has the following entries:
+
+    `name`
+        The artist's last.fm display name
+    `playcount`
+        The artist's playcount on last.fm at time of retrieval
+    `mbid`
+        The artist's MusicBrainz ID
+    `url`
+        The artist's URL on last.fm
+    """
     if not lfm:
         lfm = pylast.LastFMNetwork(api_key=LFM_KEY, api_secret=LFM_SEC)
     sk_performers = []
     performers = event['performance']
-    print event
     for performer in performers:
-        print performer['artist']['identifier']
         mbid = None
-        if performer['artist']['identifier']: # TODO: handle longer than 1?
+        if performer['artist']['identifier']:
+            # TODO: handle longer than 1? (see note in docstring)
             assert len(performer['artist']['identifier'])==1
             mbid = performer['artist']['identifier'][0].get('mbid', None)
 
@@ -76,24 +219,159 @@ def get_sk_performer_list(event, fsq=None, lfm=None):
                 lfm=lfm
             )
             sk_performers.append(lfm_performer)
-        except:
-            print 'Failed a performer add.'
+        except pylast.WSError:
+            # Failed to look up the performer. TODO: guess at what to call it?
+            # See note in docstring.
+            pass
     return sk_performers
 
-def songkick_events_for_day(day, zip):
-    sk = songkick.SongkickAPI(SK_KEY)
-    loc_db = models.ZipCode.load('/locations/zip/%s' % zip)
-    loc = 'geo:%s,%s' % (loc_db.lat, loc_db.lon)
-    date = day.strftime('%Y-%m-%d')
-    all_events = sk.event_search(location=loc, min_date=date, max_date=date)
-    zip_events = []
-    for event in all_events:
-        venue = sk.venue_details(event['venue']['id'])
-        if venue['zip'] == zip:
-            zip_events.append((event, venue, get_sk_performer_list(event)))
-    return zip_events
+def get_lfm_performer(mbid=None, name=None, lfm=None):
+    """
+    Given a `mbid` and/or artist `name`, return last.fm artist details.
+
+    First we try to look up by MBID only. If that fails, or if no MBID was
+    provided, we try an artist name lookup. If none of that yielded an artist,
+    we return an empty dictionary.
+
+    A `pylast.WSError` is raised if the lookup failed.
+
+    TODO: should we return None?
+
+    Parameters
+    ==========
+
+    `mbid`
+        The artist's MusicBrainz ID
+
+    `name`
+        The artist's name
+
+    `lfm`
+        An initialized pylast LastFMNetwork object, or None to use a new one.
+
+    Returns
+    =======
+
+    If the artist is found, return a dictionary representing the artist as
+    looked up on last.fm. If the artist is not found, returns an empty dict.
+    A successful lookup dictionary contains the following entries:
+
+    `name`
+        The artist's last.fm display name
+    `playcount`
+        The artist's playcount on last.fm at time of retrieval
+    `mbid`
+        The artist's MusicBrainz ID
+    `url`
+        The artist's URL on last.fm
+    """
+
+    # Create a new pylast connection if necessary:
+    if not lfm:
+        lfm = pylast.LastFMNetwork(api_key=LFM_KEY, api_secret=LFM_SEC)
+
+    # We need *some* information to search:
+    assert mbid or name
+    artist = None
+
+    # Try using the MBID if we have it.
+    # TODO: deal with the WSError here?
+    if mbid:
+        artist = lfm.get_artist_by_mbid(mbid)
+
+    # If MBID lookup failed or MBID wasn't provided, do it by name:
+    if name and not mbid or not artist:
+        artist = lfm.get_artist(name)
+
+    # Return the dict
+    artist_dict = {}
+    if artist:
+        artist_dict.update(
+            name=artist.name,
+            playcount=artist.get_playcount(),
+            mbid=artist.get_mbid(),
+            url=artist.get_url()
+        )
+    return artist_dict
+
+
+def get_eventful_performer_list(event, lfm=None):
+    """
+    Given a raw Eventful `event` and optional last.fm API `lfm` return
+    a list of the event's performers.
+
+    Currently not implemented.
+
+    Parameters
+    ==========
+
+    `event`
+        The raw event as returned from the Eventful API
+
+    `lfm`
+        An initialized pylast LastFMNetwork object, or None to use a new one.
+
+    Returns
+    =======
+
+    A list of dictionaries representing performers as returned by
+    `get_lfm_performer`. The dictionary has the following entries:
+
+    `name`
+        The artist's last.fm display name
+    `playcount`
+        The artist's playcount on last.fm at time of retrieval
+    `mbid`
+        The artist's MusicBrainz ID
+    `url`
+        The artist's URL on last.fm
+    """
+    raise NotImplementedError()
+
+def get_total_lfm_plays_for_event(event):
+    """
+    Given an `event` in our `models.DangerEntry` dictionary format, return its
+    performers' total playcounts.
+
+    Parameters
+    ==========
+
+    `event`
+        A dictionary, as in the `models.DangerEntry` format
+
+    Returns
+    =======
+
+    The sum of the event's last.fm performers' play counts.
+
+    """
+    return reduce(
+        operator.add,
+        (performer['playcount'] for performer in event['performers']),
+        0
+    )
+
+### Venue handling ###
 
 def get_foursquare_venue_normalization(sk_venue, fsq=None):
+    """
+    Given a songkick venue `sk_venue`, return a guess at a Foursquare location.
+
+    Parameters
+    ==========
+
+    `sk_venue`
+        The raw Songkick venue details object representing the venue.
+
+    `fsq`
+        An initialized foursquare API connection object, or None to create
+        a new one.
+
+    Returns
+    =======
+
+    A foursquare object representing the venue.
+    """
     if not fsq:
         fsq = foursquare.Foursquare(client_id=FSQ_CID, client_secret=FSQ_SEC)
     venue_url_sk = sk_venue['uri']
@@ -113,54 +391,61 @@ def get_foursquare_venue_normalization(sk_venue, fsq=None):
 
     return fsq_venue
 
-def get_lfm_performer(mbid=None, name=None, lfm=None):
-    if not lfm:
-        lfm = pylast.LastFMNetwork(api_key=LFM_KEY, api_secret=LFM_SEC)
-    assert mbid or name
-    artist = None
-    if mbid:
-        artist = lfm.get_artist_by_mbid(mbid)
-    if name and not mbid or not artist:
-        artist = lfm.get_artist(name)
-    artist_dict = {}
-    if artist:
-        artist_dict.update(
-            name=artist.name,
-            playcount=artist.get_playcount(),
-            mbid=artist.get_mbid(),
-            url=artist.get_url()
-        )
-    return artist_dict
-
-def get_eventful_performer_list(lfm, event):
-    raise NotImplementedError()
-
-def get_total_lfm_plays_for_event(event):
-    return reduce(
-        operator.add,
-        (performer['playcount'] for performer in event['performers']),
-        0
-    )
+### The danger/attendance estimate ###
 
 def get_attendance_estimate_for_event(event):
-        # If we don't know the capacity, we'll assume it's bar sized.
-        # Otherwise we'll need to fix the venue on songkick.
-        capacity = event['venue']['capacity'] or 100
-        lfm_plays = get_total_lfm_plays_for_event(event)
-        attendance_possible = lfm_plays / 500.0
-        # TODO?: This is pretty darn simplistic.
-        attendance = min(capacity, attendance_possible)
-        return attendance
+    """
+    Given a nearly complete `models.DangerEntry` compatible event dict,
+    return its estimated attendance.
+
+    Parameters
+    ==========
+
+    `event`
+        A `models.DangerEntry` formatted event dictionary. It must have
+        a ``venue`` key, whose value must have a ``capacity`` key.
+        `get_total_lfm_plays_for_event` also requires its ``performers``
+        entry to be iterable and, if any exist, be dictionaries with
+        the ``playcount`` key.
+
+    Returns
+    =======
+
+    A really bad estimate of the attendance for this event, in the form of
+    an `int`.
+    """
+    # If we don't know the capacity, we'll assume it's bar sized (100ish).
+    # Otherwise we'll need to fix the venue on songkick.
+    capacity = event['venue']['capacity'] or 100
+    lfm_plays = get_total_lfm_plays_for_event(event)
+    attendance_possible = lfm_plays / 500.0
+    # TODO?: This is pretty darn simplistic.
+    attendance = min(capacity, attendance_possible)
+    return attendance
 
 def get_events_for_day(day):
-    ret_events = []
+    """
+    Returns a list of `models.DangerEntry.events` formatted events for
+    the given date `day`.
 
-    # Initialize Songkick API:
-    sk = songkick.SongkickAPI(SK_KEY)
-    # Initialize Foursquare API (userless):
-    fsq = foursquare.Foursquare(client_id=FSQ_CID, client_secret=FSQ_SEC)
-    # Initialize Last.fm API:
-    lfm = pylast.LastFMNetwork(api_key=LFM_KEY, api_secret=LFM_SEC)
+    It looks them up using Songkick and may in the future support merging
+    Songkick results with Eventful results. Songkick has issues looking into
+    the past, so only future events should be considered reliable.
+
+    Parameters
+    ==========
+
+    `day`
+        A `datetime.date` object representing the day to check.
+
+    Returns
+    =======
+
+    A list of dictionaries in the format of the `models.DangerEntry.events`
+    field.
+    """
+
+    ret_events = []
 
     # Grab the day's events in the desired zip code:
     songkick_event_venues = songkick_events_for_day(day, '74103')
@@ -172,78 +457,20 @@ def get_events_for_day(day):
 
     # Now, let's check out each event individually:
     for event, venue, performers in event_venues:
-        event_name = event['displayName']
-        venue_name = venue['displayName']
-        venue_url_sk = venue['uri']
-        venue_capacity = venue['capacity'] or 0
-        if VERBOSE: print 'Producing an event record for the event titled "%s" at "%s":' % (event['displayName'], venue['displayName'])
-        fsq_venue = get_foursquare_venue_normalization(venue, fsq=fsq)
-        checkins = fsq_venue['hereNow']['count']
-        if VERBOSE: print '\t\tFoursquare venue "%s" found' % fsq_venue['name']
-        if VERBOSE: print '\t\tSongkick venue capacity %s' % str(venue_capacity)
+        if VERBOSE: print 'Producing an event record for the event titled ' \
+                          '"%s" at "%s":' % (event['title'], venue['name'])
 
-        venue_record = dict(
-            name=venue_name,
-            capacity=venue_capacity,
-            url_sk=venue_url_sk,
-            id_fsq=fsq_venue['id'],
-        )
-
-        event_record = dict(
-            title=event_name,
-            venue=venue_record,
+        # Add the venues and performers to the event:
+        event.update(
+            venue=venue,
             performers=performers,
-            # TODO: time
         )
 
-        event_record.update(
-            attendance_estimate=get_attendance_estimate_for_event(event_record),
-            total_plays_lfm=get_total_lfm_plays_for_event(event_record),
+        # Compute and incorporate attendance estimates and total plays:
+        event.update(
+            attendance_estimate=get_attendance_estimate_for_event(event),
+            total_plays_lfm=get_total_lfm_plays_for_event(event),
         )
-        ret_events.append(event_record)
+
+        ret_events.append(event)
     return ret_events
-
-def attendance_for_events(events):
-    attendance_total = 0
-    for event in events:
-        attendance_total += event.get_attendance_estimate()
-    return attendance_total
-
-def attendance_for_day(day):
-    events = get_events_for_day(day)
-    return attendance_for_events(events)
-
-def print_day_summary(day):
-    events = get_events_for_day(day)
-    day_lfm_plays = 0
-    day_eventful_demands = 0
-
-    for event in events:
-        event_lfm_plays = event.get_lfm_plays()
-        event_eventful_demands = event.get_eventful_demands()
-
-        event_desc = '%s at %s (lfm:%i, eventful:%i, cap:%s): %i' % (
-            event.title,
-            event.venue,
-            event_lfm_plays,
-            event_eventful_demands,
-            str(event.venue_capacity or '?'),
-            event.get_attendance_estimate(),
-        )
-        print event_desc
-    print 'Total estimate: %i' % attendance_for_events(events)
-
-def prioritize_events(events):
-    out_events = dict(useful=[], useless=[])
-    out_needs_info = []
-    for event in events:
-        if not event.performers:
-            out_events['useless'].append(event)
-        else:
-            out_events['useful'].append(event)
-        if not event.venue_capacity:
-            out_needs_info.append(event) # TODO: refactor
-    return out_events
-
-def prioritized_events_for_day(day):
-    return prioritize_events(get_events_for_day(day))
