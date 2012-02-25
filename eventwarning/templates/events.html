@@ -19,18 +19,18 @@
           <tr>
             <td>
               <ul class="unstyled">
-                {% if event.attendance_estimate >= (event.venue_capacity or 0) %}
+                {% if event.attendance_estimate >= (event.venue.capacity or 0) %}
                   <li><span class="label label-important">Sellout</span></li>
                 {% endif %}
-                {% if event.lastfm_plays >= 1000000 %}
+                {% if event.total_plays_lfm >= 1000000 %}
                   <li><span class="label label-warning">Popular artist</span></li>
                 {% endif %}
               </ul>
             </td>
             <td>{{ event.title }}</td>
-            <td>{{ event.venue_name }}</td>
+            <td>{{ event.venue.name }}</td>
             <td>
-              {{ event.attendance_estimate }} / {{ event.venue_capacity or "?" }}
+              {{ event.attendance_estimate }} / {{ event.venue.capacity or "?" }}
              </td>
           </tr>
         {% endfor %}
