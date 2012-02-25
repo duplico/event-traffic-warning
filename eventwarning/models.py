@@ -63,22 +63,27 @@ class DangerEntry(Document):
 
     events = ListField(
         DictField(Mapping.build(
+            # Event-specific data (songkick):
             title = TextField(),
+            url_sk = TextField(),
+            time = DateTimeField(),
+            # Venue data (foursquare/songkick):
             venue = DictField(Mapping.build(
                 name = TextField(),
                 capacity = IntegerField(),
                 urk_sk = TextField(),
                 id_fsq = TextField(),
             )),
+            # Performer data (last.fm):
             performers = ListField(DictField(Mapping.build(
                 name = TextField(),
                 playcount = IntegerField(),
                 mbid = TextField(),
                 url_lfm = TextField(),
             ))),
-            time = DateTimeField(),
-            attendance_estimate = IntegerField(),
             total_plays_lfm = IntegerField(),
+            # Danger data (eventwarning):
+            attendance_estimate = IntegerField(),
         ))
     )
     updated = DateTimeField(default=datetime.datetime.now())
