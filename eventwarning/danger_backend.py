@@ -61,6 +61,7 @@ def get_sk_performer_list(event, fsq=None, lfm=None):
         lfm = pylast.LastFMNetwork(api_key=LFM_KEY, api_secret=LFM_SEC)
     sk_performers = []
     performers = event['performance']
+    print event
     for performer in performers:
         print performer['artist']['identifier']
         mbid = None
@@ -68,12 +69,15 @@ def get_sk_performer_list(event, fsq=None, lfm=None):
             assert len(performer['artist']['identifier'])==1
             mbid = performer['artist']['identifier'][0].get('mbid', None)
 
-        lfm_performer = get_lfm_performer(
-            mbid=mbid,
-            name=performer['artist']['displayName'],
-            lfm=lfm
-        )
-        sk_performers.append(lfm_performer)
+        try:
+            lfm_performer = get_lfm_performer(
+                mbid=mbid,
+                name=performer['artist']['displayName'],
+                lfm=lfm
+            )
+            sk_performers.append(lfm_performer)
+        except:
+            print 'Failed a performer add.'
     return sk_performers
 
 def songkick_events_for_day(day, zip):
@@ -131,6 +135,23 @@ def get_lfm_performer(mbid=None, name=None, lfm=None):
 def get_eventful_performer_list(lfm, event):
     raise NotImplementedError()
 
+def get_total_lfm_plays_for_event(event):
+    return reduce(
+        operator.add,
+        (performer['playcount'] for performer in event['performers']),
+        0
+    )
+
+def get_attendance_estimate_for_event(event):
+        # If we don't know the capacity, we'll assume it's bar sized.
+        # Otherwise we'll need to fix the venue on songkick.
+        capacity = event['venue']['capacity'] or 100
+        lfm_plays = get_total_lfm_plays_for_event(event)
+        attendance_possible = lfm_plays / 500.0
+        # TODO?: This is pretty darn simplistic.
+        attendance = min(capacity, attendance_possible)
+        return attendance
+
 def get_events_for_day(day):
     ret_events = []
 
@@ -161,15 +182,24 @@ def get_events_for_day(day):
         if VERBOSE: print '\t\tFoursquare venue "%s" found' % fsq_venue['name']
         if VERBOSE: print '\t\tSongkick venue capacity %s' % str(venue_capacity)
 
+        venue_record = dict(
+            name=venue_name,
+            capacity=venue_capacity,
+            url_sk=venue_url_sk,
+            id_fsq=fsq_venue['id'],
+        )
+
         event_record = dict(
             title=event_name,
-            # TODO: time,
-            venue_name=venue_name,
-            venue_capacity=venue_capacity,
-            performers_names=map(lambda a: a['name'], performers),
-            performers_playcounts=map(lambda a: a['playcount'], performers),
+            venue=venue_record,
+            performers=performers,
+            # TODO: time
         )
-        print event_record
+
+        event_record.update(
+            attendance_estimate=get_attendance_estimate_for_event(event_record),
+            total_plays_lfm=get_total_lfm_plays_for_event(event_record),
+        )
         ret_events.append(event_record)
     return ret_events
 
