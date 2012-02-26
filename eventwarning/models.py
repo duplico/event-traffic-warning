@@ -18,6 +18,8 @@ class ZipCode(Document):
     lon = TextField()
     city = TextField()
     state = TextField()
+    capacity = IntegerField()
+    capacity_updated = DateTimeField()
 
 couchdb_manager.add_document(ZipCode)
 
@@ -71,7 +73,7 @@ class DangerEntry(Document):
             venue = DictField(Mapping.build(
                 name = TextField(),
                 capacity = IntegerField(),
-                urk_sk = TextField(),
+                url_sk = TextField(),
                 id_fsq = TextField(),
             )),
             # Performer data (last.fm):
@@ -125,5 +127,5 @@ def get_or_create_danger_entry(day, zip):
         events=event_structs,
     )
     danger_record.id = id
-    #danger_record.store()
+    danger_record.store()
     return danger_record

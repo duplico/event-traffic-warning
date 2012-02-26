@@ -1,6 +1,6 @@
 import eventful as eventful_api
 import foursquare
-from datetime import date
+from datetime import date, datetime
 import pylast
 import pprint
 import operator
@@ -72,6 +72,53 @@ def songkick_events_for_day(day, zip):
                 get_sk_performer_list(event)
             ))
     return zip_events
+
+def get_zip_capacity(zip, sk=None):
+    """
+    Returns an estimated total venue capacity for a zip code `zip`.
+
+    Parameters
+    ==========
+
+    `zip`
+        The zip code whose capacity to accumulate.
+
+    `sk`
+        A songkick API object or None to create a new one.
+
+    Returns
+    =======
+
+    An integer capacity for the area
+
+    Side effects
+    ============
+
+    Checks the zip code database for a cached capacity. If one is not found,
+    computes the capacity and stores it to the database.
+    """
+    if not sk:
+        sk = songkick.SongkickAPI(SK_KEY)
+    loc_db = models.ZipCode.load('/locations/zip/%s' % zip)
+    if loc_db.capacity:
+        return loc_db.capacity
+    loc = '%s, %s' % (loc_db.city, loc_db.state)
+    all_venues = sk.venue_search(loc)
+    capacity = 0
+    for venue in all_venues:
+        if venue['zip'] != zip:
+            continue
+        if venue['capacity']:
+            if VERBOSE: print 'capacity %d at venue %s' % (venue['capacity'], venue['displayName'])
+            capacity += venue['capacity']
+        else:
+            if VERBOSE: print 'unknown capacity at venue %s' % venue['displayName']
+
+    loc_db.capacity = capacity
+    loc_db.capacity_updated = datetime.now()
+    loc_db.store()
+
+    return capacity
 
 def songkick_event_to_danger_event(event_sk):
     """
@@ -158,7 +205,7 @@ def songkick_event_to_venue_dict(event_sk, venue_sk=None, sk=None):
         name = venue_sk['displayName'],
         capacity = venue_sk['capacity'],
         url_sk = venue_sk['uri'],
-        id_fsq = venue_fsq['id'],
+        id_fsq = venue_fsq['id'] if venue_fsq else None,
     )
 
 ### Performer handling ###
@@ -198,7 +245,7 @@ def get_sk_performer_list(event, lfm=None):
         The artist's playcount on last.fm at time of retrieval
     `mbid`
         The artist's MusicBrainz ID
-    `url`
+    `url_lfm`
         The artist's URL on last.fm
     """
     if not lfm:
@@ -209,7 +256,7 @@ def get_sk_performer_list(event, lfm=None):
         mbid = None
         if performer['artist']['identifier']:
             # TODO: handle longer than 1? (see note in docstring)
-            assert len(performer['artist']['identifier'])==1
+            assert len(performer['artist']['identifier'])>=1
             mbid = performer['artist']['identifier'][0].get('mbid', None)
 
         try:
@@ -262,7 +309,7 @@ def get_lfm_performer(mbid=None, name=None, lfm=None):
         The artist's playcount on last.fm at time of retrieval
     `mbid`
         The artist's MusicBrainz ID
-    `url`
+    `url_lfm`
         The artist's URL on last.fm
     """
 
@@ -290,7 +337,7 @@ def get_lfm_performer(mbid=None, name=None, lfm=None):
             name=artist.name,
             playcount=artist.get_playcount(),
             mbid=artist.get_mbid(),
-            url=artist.get_url()
+            url_lfm=artist.get_url()
         )
     return artist_dict
 
@@ -345,6 +392,8 @@ def get_total_lfm_plays_for_event(event):
     The sum of the event's last.fm performers' play counts.
 
     """
+    for performer in event['performers']:
+        print performer['name'], performer['playcount']
     return reduce(
         operator.add,
         (performer['playcount'] for performer in event['performers']),
@@ -385,9 +434,10 @@ def get_foursquare_venue_normalization(sk_venue, fsq=None):
     if venue_guesses:
         fsq_venue = venue_guesses[0]
     else:
-        # TODO: We're going to need to get it some other way
+        # TODO: We're going to need to get it some other way, but for now
+        # we will return None, which signals that we couldn't find it.
+        # It's not like we're using it yet anyway.
         fsq_venue = None
-        assert False # crash.
 
     return fsq_venue
 

@@ -6,14 +6,39 @@
 {% block content %}
 <div class="row-fluid">
   <div class="span12">
-    <h1>Event Danger for {{zip}} on {{day}}</h1>
+    <h2>Danger Level</h2>
+    <p>
+      Danger estimate for <strong>{{ zip }}</strong> on
+      <strong>{{ day }}</strong>:
+    </p>
+    <div class="progress
+    {% if percent > 60 %}
+      progress-danger
+    {% elif percent < 25 %}
+      progress-success
+    {% endif %}
+    ">
+      <div class="bar"
+           style="width: {{ percent_str }};">{{ percent_str }}</div>
+    </div>
+    <p>
+      The danger level represents a truly horrible guess at how full of people
+      the target area is expected to be.
+    </p>
+    <h2>Detailed warnings</h2>
+    <hr />
+    <p>
+      We have more or less complete data available for the following events, and
+      are able to make predictions as to the kinds of crowds they might be
+      able to draw.
+    </p>
     <table class="table table-striped table-bordered table-condensed">
       <thead>
-        <tr><th>Warnings</th><th>Event</th><th>Venue</th><th>Estimate</th></tr>
+        <tr><th>Warnings</th><th>Event</th><th>Performers</th><th>Venue</th><th>Estimate</th></tr>
       </thead>
-      <tfoot>
-        <tr><th>icon</th><th>Total</th><th>{{zip}}</th><th>{{total}}</th></tr>
-      </tfoot>
+      {# <tfoot>
+          <tr><th>icon</th><th>Total</th><th>{{zip}}</th><th>{{total}}</th></tr>
+        </tfoot> #}
       <tbody>
         {% for event in events %}
           <tr>
@@ -23,19 +48,147 @@
                   <li><span class="label label-important">Sellout</span></li>
                 {% endif %}
                 {% if event.total_plays_lfm >= 1000000 %}
-                  <li><span class="label label-warning">Popular artist</span></li>
+                  <li><span class="label label-warning">Popular</span></li>
+                {% endif %}
+                {% if not event.venue.capacity %}
+                  <li><span class="label label-info">Capacity?</span></li>
                 {% endif %}
               </ul>
             </td>
-            <td>{{ event.title }}</td>
-            <td>{{ event.venue.name }}</td>
             <td>
-              {{ event.attendance_estimate }} / {{ event.venue.capacity or "?" }}
+              {{ event.title }} <br />
+              {% if event.url_sk %}
+                <a href="{{ event.url_sk }}">
+                  <img style="height: 1em;" src="/static/img/songkick/sk_pink_32.png" />
+                </a>
+              {% endif %}
+            </td>
+            <td>
+              <ul class="unstyled">
+                {% for performer in event.performers %}
+                  <li>{{ performer.name }}
+                  {% if performer.url_lfm %}
+                    <a href="{{ performer.url_lfm }}">
+                      <img style="height: 1em;" src="/static/img/last.fm/lfm_icon_32.png" />
+                    </a>
+                  {% endif %}
+                  </li>
+                {% endfor %}
+              </ul>
+            </td>
+            <td>
+              {{ event.venue.name }} <br />
+              {% if event.venue.url_sk %}
+                <a href="{{ event.venue.url_sk }}">
+                  <img style="height: 1em;" src="/static/img/songkick/sk_pink_32.png" />
+                </a>
+              {% endif %}
+              {% if event.venue.url_fsq %}
+                <a href="{{ event.venue.url_fsq }}">
+                  <img style="height: 1em;" src="/static/img/fsq/icon-36x36.png" />
+                </a>
+              {% endif %}
+            </td>
+            <td>
+              {{ event.attendance_estimate }} /
+              {% if event.venue.capacity %}
+                {{ event.venue.capacity }}
+              {% else %}
+                <a href="{{ event.venue.url_sk or "#"}}"><i class="icon-question-sign"></i></a>
+              {% endif %}
              </td>
           </tr>
         {% endfor %}
       </tbody>
     </table>
-  </div> <!-- span9 -->
+    {% if other_events %}
+      <h2>Other events</h2>
+      <p>
+        We have partial information available for the following events and can't
+        make any predictions based on the information we have. You may
+        be able to help by filling in more data with our information providers.
+      </p>
+      <table class="table table-striped table-bordered table-condensed">
+        <thead>
+          <tr><th>Warnings</th><th>Event</th><th>Venue</th><th>Estimate</th></tr>
+        </thead>
+        {# <tfoot>
+          <tr><th>icon</th><th>Total</th><th>{{zip}}</th><th>{{total}}</th></tr>
+        </tfoot> #}
+        <tbody>
+          {% for event in other_events %}
+            <tr>
+              <td>
+                <ul class="unstyled">
+                  {% if event.attendance_estimate >= (event.venue.capacity or 0) %}
+                    <li><span class="label label-important">Sellout</span></li>
+                  {% endif %}
+                  {% if event.total_plays_lfm >= 1000000 %}
+                    <li><span class="label label-warning">Popular</span></li>
+                  {% endif %}
+                  {% if not event.venue.capacity %}
+                    <li><span class="label label-info">Capacity?</span></li>
+                  {% endif %}
+                </ul>
+              </td>
+              <td>{{ event.title }}</td>
+              <td>{{ event.venue.name }}</td>
+              <td>
+                {{ event.attendance_estimate }} / {{ event.venue.capacity }}
+                {% if not event.venue.capacity %}
+                  <a href=""><i class="icon-search"></i></a>
+                {% endif %}
+               </td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    {% endif %}
+    <hr />
+    <h2>Key</h2>
+    <hr />
+    <table class="table table-condensed">
+      <thead>
+        <tr><th>Icon</th><th>Meaning</th></tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><span class="label label-important">Sellout</span></td>
+          <td>We predict that it is <em>possible</em> for this event to produce
+          crowds that approach this venue's capacity.</td>
+        </tr>
+        <tr>
+          <td><span class="label label-warning">Popular</span></td>
+          <td>
+            We classify (fairly arbitrarily) one or more performers at this
+            event as popular. We expect this event to have people attending
+            specifically to see the <em>particular</em> artist in question.
+          </td>
+        </tr>
+        <tr>
+          <td><span class="label label-info">Capacity?</span></td>
+          <td>
+            We don't have reliable data about the capacity of this venue.
+            We are therefore assuming it's small, about the size of a bar. If
+            this is incorrect and you know the capacity of the venue, please
+            contribute by entering this data at Songkick.
+          </td>
+        </tr>
+      </tbody>
+    </table>
+    <hr />
+    <p style="text-align:center;">
+      <a href="http://www.songkick.com/"><img src="/static/img/songkick/sk_attribution_white.png"
+        alt="Live music data provided by Songkick"
+        style="height:37px;padding-right:37px;padding-left:37px;padding-bottom:19px;" /></a>
+      <a href="http://www.last.fm/"><img src="/static/img/last.fm/lfm_red.png"
+        alt="Artist popularity data provided by Last.fm"
+        style="padding-right:37px;padding-left:37px;padding-bottom:19px;"/></a>
+      <br />
+      <a href="http://www.foursquare.com/"><img src="/static/img/fsq/poweredByFoursquare_gray.png"
+        alt="Some location data provided by Foursquare"
+        style="height:37px" /></a>
+    </p>
+  </div> <!-- span12 -->
 </div> <!-- row -->
 {% endblock content %}
