@@ -27,6 +27,10 @@ def danger_zip(zip, date):
     events = models.get_or_create_danger_entry(day_obj, zip)
     events_prioritized = events.prioritized()
 
+    region_capacity = danger.get_zip_capacity('74103')
+    percent = int((100.0 * events.total() / region_capacity))
+    percent_str = '%d%%' % percent
+
     return render_template(
         'events.html',
         zip=zip,
@@ -34,6 +38,9 @@ def danger_zip(zip, date):
         other_events=events_prioritized['useless'],
         total=events.total(),
         day=day_obj,
+        region_capacity=region_capacity,
+        percent_str=percent_str,
+        percent=percent
     )
 
 @app.route('/locations/index_zips/', methods=['POST',])

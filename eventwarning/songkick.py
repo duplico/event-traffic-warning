@@ -10,7 +10,7 @@ class SongkickAPI(object):
 
     def venue_search(self, query):
         return self._get_list('/search/venues.json',
-                         params=dict(query=query, page=page),
+                         params=dict(query=query),
                          resource_type='venue')
 
     def venue_details(self, venue_id):
