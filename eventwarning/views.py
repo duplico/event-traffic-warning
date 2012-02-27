@@ -18,7 +18,8 @@ from eventwarning import executor, running_futures
 
 @app.route('/', methods=['GET',])
 def landing():
-    pass
+    return redirect(url_for('danger_zip', zip='74103',
+                            date=datetime.now().strftime('%Y-%m-%d')))
 
 @app.route('/zip/<zip>/d/<date>/', methods=['GET',])
 def danger_zip(zip, date):
