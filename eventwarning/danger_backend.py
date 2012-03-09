@@ -13,7 +13,7 @@ VERBOSE = True
 
 ### Event handling helper functions ###
 
-def songkick_events_for_day(day, zip):
+def songkick_events_for_day(day, zip, db=None):
     """
     Given a date object `day` and a `zip`, finds and returns events from
     Songkick.
@@ -58,7 +58,7 @@ def songkick_events_for_day(day, zip):
 
     """
     sk = songkick.SongkickAPI(SK_KEY)
-    loc_db = models.ZipCode.load('/locations/zip/%s' % zip)
+    loc_db = models.ZipCode.load('/locations/zip/%s' % zip, db=db)
     loc = 'geo:%s,%s' % (loc_db.lat, loc_db.lon)
     date = day.strftime('%Y-%m-%d')
     all_events = sk.event_search(location=loc, min_date=date, max_date=date)
@@ -79,7 +79,7 @@ def songkick_events_for_day(day, zip):
             ))
     return zip_events
 
-def get_zip_capacity(zip, sk=None):
+def get_zip_capacity(zip, sk=None, db=None):
     """
     Returns an estimated total venue capacity for a zip code `zip`.
 
@@ -105,7 +105,7 @@ def get_zip_capacity(zip, sk=None):
     """
     if not sk:
         sk = songkick.SongkickAPI(SK_KEY)
-    loc_db = models.ZipCode.load('/locations/zip/%s' % zip)
+    loc_db = models.ZipCode.load('/locations/zip/%s' % zip, db=db)
     if loc_db.capacity:
         return loc_db.capacity
     loc = '%s, %s' % (loc_db.city, loc_db.state)
@@ -479,7 +479,7 @@ def get_attendance_estimate_for_event(event):
     attendance = min(capacity, attendance_possible)
     return attendance
 
-def get_events_for_day(day):
+def get_events_for_day(day, db=None):
     """
     Returns a list of `models.DangerEntry.events` formatted events for
     the given date `day`.
@@ -504,7 +504,7 @@ def get_events_for_day(day):
     ret_events = []
 
     # Grab the day's events in the desired zip code:
-    songkick_event_venues = songkick_events_for_day(day, '74103')
+    songkick_event_venues = songkick_events_for_day(day, '74103', db=db)
 
     # TODO: grab eventful's events for the same area/day
     # TODO: merge them
