@@ -115,15 +115,15 @@ class DangerEntry(Document):
         return percent
 
     def get_tweet(self):
-        venues = (
+        venues = [
             event['venue']['name'] for event in sorted(
                 self.events,
                 key=lambda e: e['venue']['capacity']
-        ))
+        )]
         venue_count = len(venues)
         venue_list_string = ', '.join(venues)
-        url = 'evtl.in/XXXXX'
-        print '%d%% danger. %d events at: %s, ' % (
+        url = 'evtl.in/pXXXXX'
+        return '%d%% danger. %d events at: %s - %s' % (
             self.danger,
             venue_count,
             venue_list_string,
