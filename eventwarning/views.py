@@ -29,10 +29,12 @@ def default_zip_danger(date):
 
 @app.route('/zip/<zip>/d/<date>/', methods=['GET',])
 def danger_zip(zip, date):
+
     day_obj = datetime.strptime(date, '%Y-%m-%d').date()
 
-    id = '/dangers/zip/%s/d/%s' % (zip, day.strftime('%Y-%m-%d'))
-    danger_record = DangerEntry.load(id)
+    id = '/dangers/zip/%s/d/%s' % (zip, day_obj.strftime('%Y-%m-%d'))
+    danger_record = models.DangerEntry.load(id)
+
     if not danger_record:
         if id in running_futures:
             if running_futures[id].done():
@@ -49,6 +51,7 @@ def danger_zip(zip, date):
             # In progress
 
     if not danger_record:
+        return make_response('In progress\n', 202)
         return render_template(
             'events.html',
             zip=zip,
@@ -117,6 +120,6 @@ def index_zips():
     else:
         return make_response('INVALID SECRET\n', 403)
 
-@app.route('/<shortcut>', methods=['GET',])
+@app.route('/p<shortcut>', methods=['GET',])
 def shortcut_entry(shortcut):
     pass

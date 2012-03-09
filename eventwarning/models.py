@@ -137,17 +137,22 @@ def get_or_create_danger_entry(day, zip, db=None):
     #   in ~danger_backend.py:164.
 
     id = '/dangers/zip/%s/d/%s' % (zip, day.strftime('%Y-%m-%d'))
+    print 'pre-load'
     danger_record = DangerEntry.load(id, db=db)
+    print 'post-load'
     if danger_record:
         return danger_record
 
     events = []
-    event_structs = danger.get_events_for_day(day)
+    print 'pre-get'
+    event_structs = danger.get_events_for_day(day, db=db)
+    print 'post-get'
     danger_record = DangerEntry(
         location=zip,
         date=day,
         events=event_structs,
     )
     danger_record.id = id
+    print 'pre-store'
     danger_record.store(db=db)
     return danger_record
