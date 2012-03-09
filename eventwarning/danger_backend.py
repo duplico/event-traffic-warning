@@ -64,6 +64,12 @@ def songkick_events_for_day(day, zip):
     all_events = sk.event_search(location=loc, min_date=date, max_date=date)
     zip_events = []
     for event in all_events:
+        if not event['venue']['id']:
+            # Unknown venue. Should probably emit in some way.
+            if VERBOSE: print 'Found unknown venued event %s' % (
+                event['displayName']
+            )
+            continue
         venue_sk = sk.venue_details(event['venue']['id'])
         if venue_sk['zip'] == zip:
             zip_events.append((
