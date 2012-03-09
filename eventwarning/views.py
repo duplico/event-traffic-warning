@@ -11,6 +11,8 @@ from eventwarning import app
 from eventwarning import models
 from eventwarning import executor, running_futures
 
+DEFAULT_ZIP = "74103"
+
 # /
 # /zip/<zip>/d/<date>
 #
@@ -21,8 +23,58 @@ def landing():
     return redirect(url_for('danger_zip', zip='74103',
                             date=datetime.now().strftime('%Y-%m-%d')))
 
+@app.route('/d/<date>/')
+def default_zip_danger(date):
+    return danger_zip(DEFAULT_ZIP, date)
+
 @app.route('/zip/<zip>/d/<date>/', methods=['GET',])
 def danger_zip(zip, date):
+    day_obj = datetime.strptime(date, '%Y-%m-%d').date()
+
+    id = '/dangers/zip/%s/d/%s' % (zip, day.strftime('%Y-%m-%d'))
+    danger_record = DangerEntry.load(id)
+    if not danger_record:
+        if id in running_futures:
+            if running_futures[id].done():
+                danger_record = running_futures[id].result()
+            else:
+                pass # In progress
+        else:
+            running_futures[id] = executor.submit(
+                models.get_or_create_danger_entry,
+                day_obj,
+                zip,
+                db=flask.g.couch
+            )
+            # In progress
+
+    if not danger_record:
+        return render_template(
+            'events.html',
+            zip=zip,
+            day=day_obj,
+            events=None,
+        )
+
+    events_prioritized = danger_record.prioritized()
+    region_capacity = danger.get_zip_capacity('74103')
+    percent = int((100.0 * danger_record.total() / region_capacity))
+    percent_str = '%d%%' % percent
+
+    return render_template(
+        'events.html',
+        zip=zip,
+        events=events_prioritized['useful'],
+        other_events=events_prioritized['useless'],
+        total=danger_record.total(),
+        day=day_obj,
+        region_capacity=region_capacity,
+        percent_str=percent_str,
+        percent=percent
+    )
+
+@app.route('/q/z/<zip>/d/<date>/', methods=['GET',])
+def query_danger_status(zip, date):
     day_obj = datetime.strptime(date, '%Y-%m-%d').date()
 
     events = models.get_or_create_danger_entry(day_obj, zip)
@@ -31,6 +83,8 @@ def danger_zip(zip, date):
     region_capacity = danger.get_zip_capacity('74103')
     percent = int((100.0 * events.total() / region_capacity))
     percent_str = '%d%%' % percent
+
+    print events.get_tweet()
 
     return render_template(
         'events.html',
@@ -62,3 +116,7 @@ def index_zips():
         return make_response('Job started\n', 202)
     else:
         return make_response('INVALID SECRET\n', 403)
+
+@app.route('/<shortcut>', methods=['GET',])
+def shortcut_entry(shortcut):
+    pass
