@@ -59,6 +59,8 @@ def danger_zip(zip, date):
             events=None,
         )
 
+    tweet = danger_record.get_tweet()
+
     events_prioritized = danger_record.prioritized()
     region_capacity = danger.get_zip_capacity('74103')
     percent = int((100.0 * danger_record.total() / region_capacity))
@@ -73,7 +75,8 @@ def danger_zip(zip, date):
         day=day_obj,
         region_capacity=region_capacity,
         percent_str=percent_str,
-        percent=percent
+        percent=percent,
+        tweet=tweet,
     )
 
 @app.route('/q/z/<zip>/d/<date>/', methods=['GET',])
