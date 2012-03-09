@@ -108,14 +108,36 @@ class DangerEntry(Document):
             attendance_total += event.get('attendance_estimate', 0)
         return attendance_total
 
+    @property
+    def danger(self):
+        region_capacity = danger.get_zip_capacity(self.location)
+        percent = int((100.0 * self.total() / region_capacity))
+        return percent
+
+    def get_tweet(self):
+        venues = (
+            event['venue']['name'] for event in sorted(
+                self.events,
+                key=lambda e: e['venue']['capacity']
+        ))
+        venue_count = len(venues)
+        venue_list_string = ', '.join(venues)
+        url = 'evtl.in/XXXXX'
+        print '%d%% danger. %d events at: %s, ' % (
+            self.danger,
+            venue_count,
+            venue_list_string,
+            url
+        )
+
 couchdb_manager.add_document(DangerEntry)
 
-def get_or_create_danger_entry(day, zip):
+def get_or_create_danger_entry(day, zip, db=None):
     # TODO: base this off of the new dictionary format returned
     #   in ~danger_backend.py:164.
 
     id = '/dangers/zip/%s/d/%s' % (zip, day.strftime('%Y-%m-%d'))
-    danger_record = DangerEntry.load(id)
+    danger_record = DangerEntry.load(id, db=db)
     if danger_record:
         return danger_record
 
@@ -127,5 +149,5 @@ def get_or_create_danger_entry(day, zip):
         events=event_structs,
     )
     danger_record.id = id
-    danger_record.store()
+    danger_record.store(db=db)
     return danger_record
