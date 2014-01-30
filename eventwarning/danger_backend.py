@@ -1,4 +1,5 @@
-import eventful as eventful_api
+import math
+import eventful
 import foursquare
 from datetime import date, datetime
 import pylast
@@ -79,6 +80,180 @@ def songkick_events_for_day(day, zip, db=None):
             ))
     return zip_events
 
+def eventful_events_for_day(day, zip, db=None):
+    """
+    Given a date object `day` and a `zip`, finds and returns events from
+    Eventful.
+
+    The returned events are in a more or less API-agnostic format, so they
+    should be suitably normalized so as to be mergeable with, say, Songkick
+    events if so desired.
+
+    Parameters
+    ==========
+
+        `day`
+            The date for the search, a Python datetime or date object.
+
+        `zip`
+            The zip code to search in, a string.
+
+    Returns
+    =======
+
+        A list of 3-tuples of the following format:
+
+        ``(
+            event,
+            venue,
+            performers
+        )``
+
+        where:
+
+        `event`
+            The DangerEntry-formatted dictionary of event-only details as
+            returned by `songkick_event_to_danger_event`.
+
+        `venue`
+            The DangerEntry-formatted dictionary of the event's venue, as
+            returned by `songkick_event_to_venue_dict`.
+
+        `performers`
+            A list of the event's performers, as normalized to Last.fm and
+            returned by `get_sk_performer_list` in dictionary format.
+
+    """
+    ev = eventful.API(EVENTFUL_KEY)
+    
+    date_string = day.strftime('%Y%m%d00-%Y%m%d00')
+    
+    all_events_count = int(ev.call('/events/search', l='74103', 
+                           date=date_string, count_only=True)['total_items'])
+    # TODO: Handle all_events_count not being a number
+    pages = int(math.ceil(all_events_count / 10.0))
+    
+    all_events = []
+    
+    for p in range(1,pages+1):
+        events_page = all_events_count = ev.call(
+            '/events/search', 
+            l='74103', 
+            date=date_string,
+            page_size=10,
+            page_number=pages
+        )['events']['event']
+        if type(events_page) == list:
+            all_events += events_page
+        else:
+            all_events.append(events_page)
+    zip_events = []
+    for event in all_events:
+        if not event['venue_id']:
+            # Unknown venue. Should probably emit in some way.
+            if VERBOSE: print 'Found unknown venued event %s' % (
+                event['title']
+            )
+            continue
+        venue_ev = ev.call('/venues/get', id=event['venue_id'])
+        zip_events.append((
+            eventful_event_to_danger_event(event),
+            eventful_event_to_venue_dict(event, venue_ev=venue_ev, ev=ev),
+            [] # TODO: Give it a performer list
+        ))
+    return zip_events
+
+def eventful_event_to_danger_event(event_ev):
+    """
+    Given a raw Eventful event `event_ev` returns a more `models.DangerEntry`
+    compatible dictionary.
+
+    No venue or performer data is encoded.
+
+    Parameters
+    ==========
+
+    `event_ev`
+        A raw Eventful event
+
+    Returns
+    =======
+
+    A dictionary representing the event with the following fields:
+
+    `title`
+        The display name of the event
+
+    `url_ev`
+        The URL for the Eventful event page for the event
+
+    `time`
+        A Datetime object representing the start time of the event. Currently
+        non-working.
+    """
+
+    return dict(
+        title = event_ev['title'],
+        url_ev = event_ev['url'],
+        # time=datetime.datetime.strptime(
+        #    event_sk['start']['datetime'],
+        #    '%Y-%m-%dT%H:%M:%S%z' # ?????
+        #)
+    )
+    
+def eventful_event_to_venue_dict(event_ev, venue_ev=None, ev=None):
+    """
+    Given a raw Eventful event `event_ev` returns a more `models.DangerEntry`
+    compatible venue dictionary.
+
+    Parameters
+    ==========
+
+    `event_ev`
+        A raw Eventful event
+
+    `venue_ev`
+        A raw Eventful venue detail object, or None to look it up.
+
+    `ev`
+        A connected Eventful API object, or None to create a new one.
+
+    Returns
+    =======
+
+    A dictionary representing the event's venue with the following fields:
+
+    `name`
+        The display name of the venue (via Eventful).
+
+    `capacity`
+        The venue's capacity as reported by Eventful, or `None` if unknown.
+
+    `url_sk`
+        The URL for the Eventful page for the venue.
+
+    `id_fsq`
+        Our guess at the Foursquare ID of the venue.
+    """
+
+    if not ev:
+        ev = eventful.API(EVENTFUL_KEY)
+
+    if not venue_ev:
+        venue_ev = ev.call('/venues/get', id=event_ev['venue_id'])
+
+    #venue_fsq = get_foursquare_venue_normalization(venue_sk)
+    venue_fsq = None
+
+    return dict(
+        name = venue_ev['name'],
+        #capacity = venue_sk['capacity'],
+        capacity = 0, # TODO
+        url_ev = venue_ev['url'],
+        id_fsq = venue_fsq['id'] if venue_fsq else None,
+    )
+    
+    
 def get_zip_capacity(zip, sk=None, db=None):
     """
     Returns an estimated total venue capacity for a zip code `zip`.
