@@ -1,4 +1,4 @@
-Flask==0.8
+Flask==1.0
 Flask-CouchDB>=0.2.1
 nose>=1.1.2
 Flask-WTF>=0.5.2
